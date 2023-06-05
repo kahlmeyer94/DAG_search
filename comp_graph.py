@@ -672,7 +672,7 @@ def sympy2dag(expr, m):
                 v, c = str(expr).split('_')
                 if v == 'x':
                     new_dict[i] = (str(expr), parents)
-                    seen_inps.append(int(c))
+                    seen_inps.append(int(c.replace('{', '').replace('}', '')))
                 else:
                     new_dict[i] = (f'c_{const_counter}', parents)
                     const_dict[const_counter] = None
@@ -699,8 +699,8 @@ def sympy2dag(expr, m):
     outp_idxs = [0]
     inp_idxs = [i for i in new_dict if new_dict[i][0].startswith('x_')]
     const_idxs = [i for i in new_dict if new_dict[i][0].startswith('c_')]
-    inp_sort_idxs = np.argsort(np.array([int(new_dict[i][0].split('_')[1]) for i in inp_idxs]))
-    const_sort_idxs = np.argsort(np.array([int(new_dict[i][0].split('_')[1]) for i in const_idxs]))
+    inp_sort_idxs = np.argsort(np.array([int(new_dict[i][0].split('_')[1].replace('{', '').replace('}', '')) for i in inp_idxs]))
+    const_sort_idxs = np.argsort(np.array([int(new_dict[i][0].split('_')[1].replace('{', '').replace('}', '')) for i in const_idxs]))
 
     inp_idxs = [inp_idxs[i] for i in inp_sort_idxs]
     const_idxs = [const_idxs[i] for i in const_sort_idxs]
