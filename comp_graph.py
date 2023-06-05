@@ -651,6 +651,7 @@ def expressions2dag(expr1, expr2):
 def sympy2dag(expr, m):
     sympy_dict, _ = get_sympy_dag(expr)
     
+    
     const_counter = 0
     transl_dict = {
         sympy.core.add.Add : '+',
