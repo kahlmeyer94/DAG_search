@@ -19,7 +19,8 @@ NODE_OPS = {
     'sin' : np.sin,
     'cos' : np.cos,
     'exp' : np.exp,
-    'log' : np.log
+    'log' : np.log,
+    'sqrt' : np.sqrt
 }
 
 NODE_OPS_PYTORCH = {
@@ -31,7 +32,8 @@ NODE_OPS_PYTORCH = {
     'sin' : torch.sin,
     'cos' : torch.cos,
     'exp' : torch.exp,
-    'log' : torch.log
+    'log' : torch.log,
+    'sqrt' : torch.sqrt
 }
 
 NODE_ARITY = {
@@ -43,7 +45,8 @@ NODE_ARITY = {
     'sin' : 1, 
     'cos' : 1,
     'exp' : 1,
-    'log' : 1
+    'log' : 1,
+    'sqrt' : 1
 }
 
 NODE_STR = {
@@ -55,7 +58,8 @@ NODE_STR = {
     'sin' : 'np.sin(a)',
     'cos' : 'np.cos(a)',
     'exp' : 'np.exp(a)',
-    'log' : 'np.log(a)'
+    'log' : 'np.log(a)',
+    'sqrt' : 'np.sqrt(a)',
 }
 
 '''
@@ -71,5 +75,6 @@ NODE_OPS_SYMB = {
     'sin' : lambda x: sympy.sin(x),
     'cos' : lambda x: sympy.cos(x),
     'exp' : lambda x: sympy.exp(x),
-    'log' : lambda x: sympy.log(x)
+    'log' : lambda x: sympy.log(x),
+    'sqrt' : lambda x: sympy.sqrt(x),
 }
