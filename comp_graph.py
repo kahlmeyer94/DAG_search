@@ -508,12 +508,9 @@ def get_sympy_dag(expr, tree_dict = None):
         func = expr.func
         children = expr.args
         
-        if func is sympy.core.power.Pow and children[1] == 0.5:
+        if func is sympy.core.power.Pow and int(children[1]) != float(children[1]):
             func = sympy.exp
-            children = [0.5*sympy.log(children[0])]
-        elif func is sympy.core.power.Pow and children[1] == -0.5:
-            func = sympy.exp
-            children = [-0.5*sympy.log(children[0])]
+            children = [float(children[1])*sympy.log(children[0])]
         
         if func is sympy.core.mul.Mul and children[0] == -1:
             func = 'neg'
