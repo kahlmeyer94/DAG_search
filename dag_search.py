@@ -89,7 +89,7 @@ class MSE_loss_fkt(DAG_Loss_fkt):
             return losses
 
 
-def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -10, interval_upper:float = 10, n_steps = 100) -> tuple:
+def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -1, interval_upper:float = 1, n_steps = 20) -> tuple:
     '''
     Given a computational graph, optimizes for constants using scipy.
 
@@ -107,12 +107,17 @@ def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss
     '''
     values = np.linspace(interval_lower, interval_upper, n_steps)
     k = cgraph.n_consts
-    tmp = np.meshgrid(*[values]*k)
-    consts = np.column_stack([x.flatten() for x in tmp])
-    losses = loss_fkt(X, cgraph, consts)
+    if k == 0:
+        consts = np.array([])
+        loss = loss_fkt(X, cgraph, consts)
+        return consts, loss
+    else:
+        tmp = np.meshgrid(*[values]*k)
+        consts = np.column_stack([x.flatten() for x in tmp])
+        losses = loss_fkt(X, cgraph, consts)
 
-    best_idx = np.argmin(losses)
-    return consts[best_idx], losses[best_idx]
+        best_idx = np.argmin(losses)
+        return consts[best_idx], losses[best_idx]
 
 def get_consts_opt(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_start:np.ndarray = None, max_it:int = 5, interval_lower:float = -1, interval_upper:float = 1) -> tuple:
     '''
