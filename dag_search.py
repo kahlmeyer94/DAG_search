@@ -89,9 +89,44 @@ class MSE_loss_fkt(DAG_Loss_fkt):
             return losses
 
 
-def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -1, interval_upper:float = 1, n_steps = 20) -> tuple:
+def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_init:np.ndarray = 0, interval_size:float = 2.0, n_steps:int = 51, return_arg:bool = False) -> tuple:
     '''
-    Given a computational graph, optimizes for constants using scipy.
+    Given a computational graph, optimizes for constants using grid search.
+
+    @Params:
+        cgraph... computational graph
+        X... input for DAG
+        loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
+        c_start... if given, start point for optimization
+        max_it... maximum number of retries
+        c_init... initial constants
+        interval_size... size of search interval around c_init
+    @Returns:
+        constants that have lowest loss, loss
+    '''
+    k = cgraph.n_consts
+    if k == 0:
+        consts = np.array([])
+        loss = loss_fkt(X, cgraph, consts)
+        return consts, loss
+
+    if not (type(c_init) is np.ndarray):
+        c_init = c_init*np.ones(k)
+
+    l = interval_size/2
+    values = np.linspace(-l, l, n_steps)
+    tmp = np.meshgrid(*[values]*k)
+    consts = np.column_stack([x.flatten() for x in tmp])
+    consts = consts + np.stack([c_init]*len(consts))
+
+    losses = loss_fkt(X, cgraph, consts)
+
+    best_idx = np.argmin(losses)
+    return consts[best_idx], losses[best_idx]
+
+def get_consts_grid_zoom(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -1, interval_upper:float = 1, n_steps:int = 11, n_zooms:int = 3) -> tuple:
+    '''
+    Given a computational graph, optimizes for constants using grid search with zooming.
 
     @Params:
         cgraph... computational graph
@@ -105,19 +140,18 @@ def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss
     @Returns:
         constants that have lowest loss, loss
     '''
-    values = np.linspace(interval_lower, interval_upper, n_steps)
+    
     k = cgraph.n_consts
-    if k == 0:
-        consts = np.array([])
-        loss = loss_fkt(X, cgraph, consts)
-        return consts, loss
-    else:
-        tmp = np.meshgrid(*[values]*k)
-        consts = np.column_stack([x.flatten() for x in tmp])
-        losses = loss_fkt(X, cgraph, consts)
+    interval_size = interval_upper - interval_lower
+    c = (interval_upper + interval_lower)/2*np.ones(k)
+    stepsize = interval_size/(n_steps - 1)
+    for zoom in range(n_zooms):
+        c, loss = get_consts_grid(cgraph, X, loss_fkt, c_init=c, interval_size = interval_size, n_steps=n_steps)
+        interval_size = 2*stepsize
+        stepsize = interval_size/(n_steps - 1)
 
-        best_idx = np.argmin(losses)
-        return consts[best_idx], losses[best_idx]
+    return c, loss
+
 
 def get_consts_opt(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_start:np.ndarray = None, max_it:int = 5, interval_lower:float = -1, interval_upper:float = 1) -> tuple:
     '''
@@ -387,12 +421,12 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
         cgraph... computational DAG with constant input nodes
         X... input for DAG
         loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
-        opt_mode... one of {pool, opt, grid, grid_opt}
+        opt_mode... one of {pool, opt, grid, grid_opt, grid_zoom}
 
     @Returns:
         tuple of consts = array of optimized constants, loss = float of loss
     '''
-    assert opt_mode in ['pool', 'opt', 'grid', 'grid_opt'], 'Mode has to be one of {pool, opt, grid, grid_opt}'
+    assert opt_mode in ['pool', 'opt', 'grid', 'grid_opt', 'grid_zoom'], 'Mode has to be one of {pool, opt, grid, grid_opt}'
 
     if opt_mode == 'pool':
         consts, loss = get_consts_pool(cgraph, X, loss_fkt)
@@ -400,6 +434,8 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
         consts, loss = get_consts_opt(cgraph, X, loss_fkt)
     elif opt_mode == 'grid':
         consts, loss = get_consts_grid(cgraph, X, loss_fkt)
+    elif opt_mode == 'grid_zoom':
+        consts, loss = get_consts_grid_zoom(cgraph, X, loss_fkt)
     elif opt_mode == 'grid_opt':
         consts, loss = get_consts_grid(cgraph, X, loss_fkt)
         consts, loss = get_consts_opt(cgraph, X, loss_fkt, c_start=consts)
