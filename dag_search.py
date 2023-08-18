@@ -619,7 +619,12 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
     total_consts = []
     total_ops = []
     total_orders = []
+
     best_loss = np.inf
+    best_const = None
+    best_ops = None
+    best_order = None
+
     early_stop = False
     if n_processes == 1:
         # sequential
@@ -646,9 +651,13 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
                         total_ops.append(op)
                         total_orders.append(order)
 
-                if loss < best_loss and verbose == 2:
+                if loss < best_loss:
                     best_loss = loss
-                    pbar.set_postfix({'best_loss' : best_loss})
+                    best_const = c
+                    best_ops = op
+                    best_order = order
+                    if verbose == 2:
+                        pbar.set_postfix({'best_loss' : best_loss})
                 if loss < stop_thresh:
                     early_stop = True
                     break
@@ -678,6 +687,11 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
                         total_losses.append(loss)
                         total_ops.append(op)
                         total_orders.append(args[i][0])
+                if loss < best_loss:
+                    best_loss = loss
+                    best_const = c
+                    best_ops = op
+                    best_order = order
 
     top_graphs = []
     top_consts = []
@@ -689,7 +703,13 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             cgraph = build_dag(total_orders[idx], total_ops[idx], m, n, k)
             top_graphs.append(cgraph.copy())
             top_consts.append(total_consts[idx])
-    
+    else:
+        top_losses.append(best_loss)
+        cgraph = build_dag(best_order, best_ops, m, n, k)
+        top_graphs.append(cgraph.copy())
+        top_consts.append(best_const.copy())
+
+
     ret = {
         'graphs' : top_graphs,
         'consts' : top_consts,
@@ -750,7 +770,11 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
     total_losses = []
     total_consts = []
     total_graphs = []
+
     best_loss = np.inf
+    best_const = None
+    best_graph = None
+
     if n_processes == 1:
         # sequential
         if verbose == 2:
@@ -765,9 +789,13 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
                 total_consts.append(c)
                 total_losses.append(loss)
             
-            if loss < best_loss and verbose == 2:
+            if loss < best_loss:
                 best_loss = loss
-                pbar.set_postfix({'best_loss' : best_loss})
+                best_const = c
+                best_graph = cgraph.copy()
+
+                if verbose == 2:
+                    pbar.set_postfix({'best_loss' : best_loss})
 
             if loss <= stop_thresh:
                 break
@@ -785,6 +813,10 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
                 total_graphs.append(cgraphs[i].copy())
                 total_consts.append(c)
                 total_losses.append(loss)
+            if loss < best_loss:
+                best_loss = loss
+                best_const = c
+                best_graph = cgraphs[i].copy()
 
     top_graphs = []
     top_consts = []
@@ -795,6 +827,10 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
             top_losses.append(total_losses[idx])
             top_graphs.append(total_graphs[idx])
             top_consts.append(total_consts[idx])
+    else:
+        top_losses.append(best_loss)
+        top_graphs.append(best_graph)
+        top_consts.append(best_const)
     
     ret = {
         'graphs' : top_graphs,
