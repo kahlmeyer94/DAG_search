@@ -565,7 +565,7 @@ def is_pickleable(x:object) -> bool:
     except (pickle.PicklingError, AttributeError):
         return False
 
-def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, loss_thresh:float = 1.0, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_size:int = np.inf, **params) -> dict:
+def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, loss_thresh:float = 1.0, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_size:int = np.inf, stop_thresh:float = -1.0, **params) -> dict:
     '''
     Exhaustive search for a DAG.
 
@@ -581,6 +581,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         opt_mode... method for optimizing constants, one of {pool, opt, grid, grid_opt}
         max_orders... will at most evaluate this many chosen orders
         max_size... will only return at most this many graphs (sorted by loss)
+        stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
 
     @Returns:
         dictionary with:
@@ -613,6 +614,8 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
     total_consts = []
     total_ops = []
     total_orders = []
+    best_loss = np.inf
+    early_stop = False
     if n_processes == 1:
         # sequential
         losses = []
@@ -623,8 +626,8 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         for order in pbar:
             consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, opt_mode = opt_mode)
             for c, loss, op in zip(consts, losses, ops):
+                
                 if loss <= loss_thresh:
-
                     if len(total_losses) >= max_size:
                         repl_idx = np.argmax(total_losses)
                         if total_losses[repl_idx] > loss:
@@ -637,6 +640,15 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
                         total_losses.append(loss)
                         total_ops.append(op)
                         total_orders.append(order)
+
+                if loss < best_loss and verbose == 2:
+                    best_loss = loss
+                    pbar.set_postfix({'best_loss' : best_loss})
+                if loss < stop_thresh:
+                    early_stop = True
+                    break
+            if early_stop:
+                break
     else:
         args = [[order, m, n, k, X, loss_fkt, opt_mode] for order in orders]
         if verbose == 2:
@@ -680,7 +692,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
 
     return ret
 
-def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, loss_thresh:float = 1.0, verbose:int = 0, opt_mode:str = 'grid', n_samples:int = int(1e4), **params) -> dict:
+def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, loss_thresh:float = 1.0, verbose:int = 0, opt_mode:str = 'grid', n_samples:int = int(1e4), stop_thresh:float = -1.0, **params) -> dict:
     '''
     Sampling search for a DAG.
 
@@ -695,6 +707,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
         verbose... print modus 0 = no print, 1 = status messages, 2 = progress bars
         opt_mode... method for optimizing constants, one of {pool, opt, grid, grid_opt}
         n_samples... number of random graphs to check
+        stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
 
     @Returns:
         dictionary with:
@@ -732,6 +745,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
     total_losses = []
     total_consts = []
     total_graphs = []
+    best_loss = np.inf
     if n_processes == 1:
         # sequential
         if verbose == 2:
@@ -745,6 +759,13 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
                 total_graphs.append(cgraph.copy())
                 total_consts.append(c)
                 total_losses.append(loss)
+            
+            if loss < best_loss and verbose == 2:
+                best_loss = loss
+                pbar.set_postfix({'best_loss' : best_loss})
+
+            if loss <= stop_thresh:
+                break
     else:
         args = [[cgraph, X, loss_fkt, opt_mode] for cgraph in cgraphs]
         if verbose == 2:
