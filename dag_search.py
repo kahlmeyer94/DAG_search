@@ -89,7 +89,7 @@ class MSE_loss_fkt(DAG_Loss_fkt):
             return losses
 
 
-def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -10, interval_upper:float = 10, n_steps = 50) -> tuple:
+def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -10, interval_upper:float = 10, n_steps = 100) -> tuple:
     '''
     Given a computational graph, optimizes for constants using scipy.
 
