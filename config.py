@@ -11,8 +11,12 @@ CONST_POOL = [1, 2, 10, np.pi, np.e]
 Numeric Operations
 '''
 NODE_OPS = {
-    '+' : np.sum,
-    '*' : np.prod,
+    '+' : lambda x, y: x + y,
+    '*' : lambda x, y: x * y,
+    'sub_l' : lambda x, y: x - y,
+    'sub_r' : lambda x, y: y - x,
+    'div_l' : lambda x, y: x/y,
+    'div_r' : lambda x, y: y/x,
     '=' : lambda x: x,
     'inv' : lambda x : 1/x,
     'neg' : lambda x : -x,
@@ -20,12 +24,17 @@ NODE_OPS = {
     'cos' : np.cos,
     'exp' : np.exp,
     'log' : np.log,
-    'sqrt' : np.sqrt
+    'sqrt' : np.sqrt,
+    'sq' : lambda x: x**2
 }
 
 NODE_OPS_PYTORCH = {
-    '+' : torch.sum,
-    '*' : torch.prod,
+    '+' : lambda x, y: x + y,
+    '*' : lambda x, y: x * y,
+    'sub_l' : lambda x, y: x - y,
+    'sub_r' : lambda x, y: y - x,
+    'div_l' : lambda x, y: x/y,
+    'div_r' : lambda x, y: y/x,
     '=' : lambda x: x,
     'inv' : lambda x : 1/x,
     'neg' : lambda x : -x,
@@ -33,12 +42,17 @@ NODE_OPS_PYTORCH = {
     'cos' : torch.cos,
     'exp' : torch.exp,
     'log' : torch.log,
-    'sqrt' : torch.sqrt
+    'sqrt' : torch.sqrt,
+    'sq' : lambda x: x**2
 }
 
 NODE_ARITY = {
     '+' : 2,
     '*' : 2,
+    'sub_l' : 2,
+    'sub_r' : 2,
+    'div_l' : 2,
+    'div_r' : 2,
     '=' : 1,
     'inv' : 1,
     'neg' : 1,
@@ -46,12 +60,17 @@ NODE_ARITY = {
     'cos' : 1,
     'exp' : 1,
     'log' : 1,
-    'sqrt' : 1
+    'sqrt' : 1,
+    'sq' : 1
 }
 
 NODE_STR = {
     '+' : '(a)+(b)',
     '*' : '(a)*(b)',
+    'sub_l' : '(a)-(b)',
+    'sub_r' : '(b)-(a)',
+    'div_l' : '(a)/(b)',
+    'div_r' : '(b)/(a)',
     '=' : '(a)',
     'inv' : '1/(a)',
     'neg' : '-(a)',
@@ -60,6 +79,7 @@ NODE_STR = {
     'exp' : 'np.exp(a)',
     'log' : 'np.log(a)',
     'sqrt' : 'np.sqrt(a)',
+    'sq' : '(a)**2'
 }
 
 '''
@@ -69,6 +89,10 @@ Symbolic Operations
 NODE_OPS_SYMB = {
     '+' : lambda x, y: x + y,
     '*' : lambda x, y: x * y,
+    'sub_l' : lambda x, y: x - y,
+    'sub_r' : lambda x, y: y - x,
+    'div_l' : lambda x, y: x/y,
+    'div_r' : lambda x, y: y/x,
     '=' : lambda x: x,
     'inv' : lambda x : 1/x,
     'neg' : lambda x : -x,
@@ -77,4 +101,5 @@ NODE_OPS_SYMB = {
     'exp' : lambda x: sympy.exp(x),
     'log' : lambda x: sympy.log(x),
     'sqrt' : lambda x: sympy.sqrt(x),
+    'sq' : lambda x: x**2
 }

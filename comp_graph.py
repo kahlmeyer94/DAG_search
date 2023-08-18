@@ -366,10 +366,11 @@ class CompGraph():
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                if child_results.shape[0] > 1:
-                    node_result = node_op(child_results, axis=0)
-                    grad_result = node_op_pt(child_results_pt, axis=0)
+                if child_results.shape[0] == 2:
+                    node_result = node_op(child_results[0], child_results[1])
+                    grad_result = node_op_pt(child_results_pt[0], child_results_pt[1])
                 else:
+                    assert child_results.shape[0] == 1
                     node_result = node_op(child_results[0])
                     grad_result = node_op_pt(child_results_pt[0])
 
