@@ -124,7 +124,7 @@ def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss
     best_idx = np.argmin(losses)
     return consts[best_idx], losses[best_idx]
 
-def get_consts_grid_zoom(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -1, interval_upper:float = 1, n_steps:int = 11, n_zooms:int = 3) -> tuple:
+def get_consts_grid_zoom(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -1, interval_upper:float = 1, n_steps:int = 21, n_zooms:int = 2) -> tuple:
     '''
     Given a computational graph, optimizes for constants using grid search with zooming.
 
@@ -151,7 +151,6 @@ def get_consts_grid_zoom(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG
         stepsize = interval_size/(n_steps - 1)
 
     return c, loss
-
 
 def get_consts_opt(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_start:np.ndarray = None, max_it:int = 5, interval_lower:float = -1, interval_upper:float = 1) -> tuple:
     '''
@@ -606,7 +605,7 @@ def is_pickleable(x:object) -> bool:
     except (pickle.PicklingError, AttributeError):
         return False
 
-def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, loss_thresh:float = 1.0, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_size:int = np.inf, stop_thresh:float = -1.0, **params) -> dict:
+def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_size:int = np.inf, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
     '''
     Exhaustive search for a DAG.
 
@@ -617,13 +616,13 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         k... number of constants
         n_calc_nodes... how many intermediate nodes at most?
         n_processes... number of processes for evaluation
-        loss_thresh... we return all graphs with a loss < loss_thresh
+        topk... we return top k found graphs
         verbose... print modus 0 = no print, 1 = status messages, 2 = progress bars
         opt_mode... method for optimizing constants, one of {pool, opt, grid, grid_opt}
         max_orders... will at most evaluate this many chosen orders
         max_size... will only return at most this many graphs (sorted by loss)
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
-
+        unique_loss... only take graph into topk if it has a totally new loss
     @Returns:
         dictionary with:
             graphs -> list of computational DAGs
@@ -631,6 +630,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             losses -> list of losses
 
     '''
+
     n_processes = max(min(n_processes, multiprocessing.cpu_count()), 1)
     ctx = multiprocessing.get_context('spawn')
 
@@ -651,15 +651,11 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         print('Evaluating orders')
 
 
-    total_losses = []
-    total_consts = []
-    total_ops = []
-    total_orders = []
-
-    best_loss = np.inf
-    best_const = None
-    best_ops = None
-    best_order = None
+    top_losses = []
+    top_consts = []
+    top_ops = []
+    top_orders = []
+    loss_thresh = np.inf
 
     early_stop = False
     if n_processes == 1:
@@ -674,26 +670,27 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             for c, loss, op in zip(consts, losses, ops):
                 
                 if loss <= loss_thresh:
-                    if len(total_losses) >= max_size:
-                        repl_idx = np.argmax(total_losses)
-                        if total_losses[repl_idx] > loss:
-                            total_consts[repl_idx] = c
-                            total_losses[repl_idx] = loss
-                            total_ops[repl_idx] = op
-                            total_orders[repl_idx] = order
+                    if unique_loss:
+                        valid = loss not in top_losses
                     else:
-                        total_consts.append(c)
-                        total_losses.append(loss)
-                        total_ops.append(op)
-                        total_orders.append(order)
+                        valid = True
 
-                if loss < best_loss:
-                    best_loss = loss
-                    best_const = c
-                    best_ops = op
-                    best_order = order
-                    if verbose == 2:
-                        pbar.set_postfix({'best_loss' : best_loss})
+                    if valid:
+                        if len(top_losses) >= topk:
+                            repl_idx = np.argmax(top_losses)
+                            top_consts[repl_idx] = c
+                            top_losses[repl_idx] = loss
+                            top_ops[repl_idx] = op
+                            top_orders[repl_idx] = order
+                        else:
+                            top_consts.append(c)
+                            top_losses.append(loss)
+                            top_ops.append(op)
+                            top_orders.append(order)
+                        
+                        loss_thresh = np.max(top_losses)
+                        if verbose == 2:
+                            pbar.set_postfix({'best_loss' : np.min(top_losses)})
                 if loss < stop_thresh:
                     early_stop = True
                     break
@@ -711,40 +708,37 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         for i, (consts, losses, ops) in enumerate(pool_results):
             for c, loss, op in zip(consts, losses, ops):
                 if loss <= loss_thresh:
-                    if len(total_losses) >= max_size:
-                        repl_idx = np.argmax(total_losses)
-                        if total_losses[repl_idx] > loss:
-                            total_consts[repl_idx] = c
-                            total_losses[repl_idx] = loss
-                            total_ops[repl_idx] = op
-                            total_orders[repl_idx] = args[i][0]
+                    if unique_loss:
+                        valid = loss not in top_losses
                     else:
-                        total_consts.append(c)
-                        total_losses.append(loss)
-                        total_ops.append(op)
-                        total_orders.append(args[i][0])
-                if loss < best_loss:
-                    best_loss = loss
-                    best_const = c
-                    best_ops = op
-                    best_order = order
+                        valid = True
 
+                    if valid:
+                        if len(top_losses) >= topk:
+                            repl_idx = np.argmax(top_losses)
+                            top_consts[repl_idx] = c
+                            top_losses[repl_idx] = loss
+                            top_ops[repl_idx] = op
+                            top_orders[repl_idx] = orders[i]
+                        else:
+                            top_consts.append(c)
+                            top_losses.append(loss)
+                            top_ops.append(op)
+                            top_orders.append(orders[i])
+                        
+                        loss_thresh = np.max(top_losses)
+                        if verbose == 2:
+                            pbar.set_postfix({'best_loss' : np.min(top_losses)})
+
+    sort_idx = np.argsort(top_losses)
+    top_losses = [top_losses[i] for i in sort_idx]
+    top_consts = [top_consts[i] for i in sort_idx]
+    top_orders = [top_orders[i] for i in sort_idx]
+    top_ops = [top_ops[i] for i in sort_idx]
     top_graphs = []
-    top_consts = []
-    top_losses = []
-    if len(total_losses) > 0:
-        sort_idx = np.argsort(total_losses)
-        for idx in sort_idx:
-            top_losses.append(total_losses[idx])
-            cgraph = build_dag(total_orders[idx], total_ops[idx], m, n, k)
-            top_graphs.append(cgraph.copy())
-            top_consts.append(total_consts[idx])
-    else:
-        top_losses.append(best_loss)
-        cgraph = build_dag(best_order, best_ops, m, n, k)
+    for order, ops in zip(top_orders, top_ops):
+        cgraph = build_dag(order, ops, m, n, k)
         top_graphs.append(cgraph.copy())
-        top_consts.append(best_const.copy())
-
 
     ret = {
         'graphs' : top_graphs,
@@ -753,7 +747,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
 
     return ret
 
-def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, loss_thresh:float = 1.0, verbose:int = 0, opt_mode:str = 'grid', n_samples:int = int(1e4), stop_thresh:float = -1.0, **params) -> dict:
+def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', n_samples:int = int(1e4), stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
     '''
     Sampling search for a DAG.
 
@@ -764,12 +758,12 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
         k... number of constants
         n_calc_nodes... how many intermediate nodes at most?
         n_processes... number of processes for evaluation
-        loss_thresh... we return all graphs with a loss < loss_thresh
+        topk... we return top k found graphs
         verbose... print modus 0 = no print, 1 = status messages, 2 = progress bars
         opt_mode... method for optimizing constants, one of {pool, opt, grid, grid_opt}
         n_samples... number of random graphs to check
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
-
+        unique_loss... only take graph into topk if it has a totally new loss
     @Returns:
         dictionary with:
             graphs -> list of computational DAGs
@@ -803,13 +797,10 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
     if verbose > 0:
         print('Evaluating graphs')
 
-    total_losses = []
-    total_consts = []
-    total_graphs = []
-
-    best_loss = np.inf
-    best_const = None
-    best_graph = None
+    top_losses = []
+    top_consts = []
+    top_graphs = []
+    loss_thresh = np.inf
 
     if n_processes == 1:
         # sequential
@@ -818,20 +809,28 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
         else:
             pbar = cgraphs
         for cgraph in pbar:
-            c, loss= evaluate_cgraph(cgraph, X, loss_fkt, opt_mode)
-            
+            c, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode)
             if loss <= loss_thresh:
-                total_graphs.append(cgraph.copy())
-                total_consts.append(c)
-                total_losses.append(loss)
-            
-            if loss < best_loss:
-                best_loss = loss
-                best_const = c
-                best_graph = cgraph.copy()
+                if unique_loss:
+                    valid = loss not in top_losses
+                else:
+                    valid = True
 
-                if verbose == 2:
-                    pbar.set_postfix({'best_loss' : best_loss})
+
+                if valid:
+                    if len(top_losses) >= topk:
+                        repl_idx = np.argmax(top_losses)
+                        top_consts[repl_idx] = c
+                        top_losses[repl_idx] = loss
+                        top_graphs[repl_idx] = cgraph.copy()
+                    else:
+                        top_consts.append(c)
+                        top_losses.append(loss)
+                        top_graphs.append(cgraph.copy())
+                    
+                    loss_thresh = np.max(top_losses)
+                    if verbose == 2:
+                        pbar.set_postfix({'best_loss' : np.min(top_losses)})
 
             if loss <= stop_thresh:
                 break
@@ -846,27 +845,28 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
             pool_results = pool.starmap(evaluate_cgraph, pbar)
         for i, (c, loss) in enumerate(pool_results):
             if loss <= loss_thresh:
-                total_graphs.append(cgraphs[i].copy())
-                total_consts.append(c)
-                total_losses.append(loss)
-            if loss < best_loss:
-                best_loss = loss
-                best_const = c
-                best_graph = cgraphs[i].copy()
+                if unique_loss:
+                    valid = loss not in top_losses
+                else:
+                    valid = True
 
-    top_graphs = []
-    top_consts = []
-    top_losses = []
-    if len(total_losses) > 0:
-        sort_idx = np.argsort(total_losses)
-        for idx in sort_idx:
-            top_losses.append(total_losses[idx])
-            top_graphs.append(total_graphs[idx])
-            top_consts.append(total_consts[idx])
-    else:
-        top_losses.append(best_loss)
-        top_graphs.append(best_graph)
-        top_consts.append(best_const)
+                if valid:
+                    if len(top_losses) >= topk:
+                        repl_idx = np.argmax(top_losses)
+                        top_consts[repl_idx] = c
+                        top_losses[repl_idx] = loss
+                        top_graphs[repl_idx] = cgraphs[i].copy()
+                    else:
+                        top_consts.append(c)
+                        top_losses.append(loss)
+                        top_graphs.append(cgraphs[i].copy())
+                    
+                    loss_thresh = np.max(top_losses)
+
+    sort_idx = np.argsort(top_losses)
+    top_graphs = [top_graphs[i] for i in sort_idx]
+    top_consts = [top_consts[i] for i in sort_idx]
+    top_losses = [top_losses[i] for i in sort_idx]
     
     ret = {
         'graphs' : top_graphs,
