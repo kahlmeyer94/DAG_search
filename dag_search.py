@@ -302,13 +302,15 @@ def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 100
         k... number of constant nodes
         n_calc_nodes... number of intermediate nodes
         max_orders... maximum number of possible DAG orders to search trough (lower = exhaustive, higher = sampling)
-        verbose... set > 0 to print progress bar
+        verbose... 0 - no print, 1 - status message, 2 - progress bar
 
     @Returns:
         list build orders (can be used by build_dag).
         build order = list of tuples (node, parent_nodes)
     '''
 
+    if verbose > 0:
+        print('Creating evaluation orders')
     l = n_calc_nodes
     inp_nodes = [i for i in range(m + k)]
     outp_nodes = [i + m + k for i in range(n)]
@@ -344,7 +346,7 @@ def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 100
     valid_set = set()
     build_orders = []
 
-    if verbose > 0:
+    if verbose == 2:
         total_its = np.prod([len(s) for s in sample_space_edges])
         pbar = tqdm(possible_edges, total = total_its)
     else: 
