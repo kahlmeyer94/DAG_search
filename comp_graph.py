@@ -316,7 +316,7 @@ class CompGraph():
         else:
             return final_result
 
-    def evaluate(self, X, c, return_grad = False):
+    def evaluate_old2(self, X, c, return_grad = False):
         '''
         X... N x m matrix
         c... array of length n_consts
@@ -403,6 +403,102 @@ class CompGraph():
                 return final_result, h_X_grad
         else:
 
+            if not vec:
+                return final_result[0]
+            else:
+                return final_result
+
+    def evaluate(self, X, c, return_grad = False):
+        '''
+        X... N x m matrix
+        c... array of length n_consts
+        return_grad... if true, will return derivative of output wrt. input
+        '''
+        assert len(self.node_dict) >= self.inp_dim + self.n_consts + self.outp_dim, 'Node dict not initialized'
+        assert len(c.shape) <= 2, 'Constants must be either 1D (single) or 2D (multiple)'
+
+        if len(c.shape) == 2:
+            r = c.shape[0]
+            vec = True
+        else:
+            c = c.reshape(1, -1)
+            r = 1
+            vec = False
+
+        # we assume that eval order is valid
+
+        N = X.shape[0]
+        k = self.inp_dim + self.n_consts
+
+        res_dict = {i : None for i in self.node_dict}
+
+        # inputs        
+        for i in range(self.inp_dim):
+            res_dict[i] = np.repeat(X[np.newaxis, :, i], r, axis=0) # r x N
+
+        for i in range(self.n_consts):
+            res_dict[i + self.inp_dim] = np.repeat(c[:, i, np.newaxis], N, axis = 1) # r x N
+
+        # others
+        for i in self.eval_order[k:]:
+            children, op = self.node_dict[i]
+            node_op = config.NODE_OPS[op]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                if len(children) == 2:
+                    node_result = node_op(res_dict[children[0]], res_dict[children[1]])
+                else:
+                    assert len(children) == 1
+                    node_result = node_op(res_dict[children[0]])
+                res_dict[i] = node_result
+
+        final_result = np.stack([res_dict[i] for i in self.outp_nodes])
+        final_result = np.transpose(final_result, [1, 2, 0])
+
+        if return_grad:
+            X_stacked = np.repeat(X[np.newaxis, :, :], r, axis=0)
+            X_tensor = torch.tensor(X_stacked, requires_grad = True).double()
+
+            grad_dict = {i : None for i in self.node_dict}      
+
+            for i in range(self.inp_dim):
+                grad_dict[i] = X_tensor[:, :, i]
+
+            for i in range(self.n_consts):
+                grad_dict[i + self.inp_dim] = torch.as_tensor(res_dict[i + self.inp_dim])
+
+            for i in self.eval_order[k:]:
+                children, op = self.node_dict[i]
+                node_op_pt = config.NODE_OPS_PYTORCH[op]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    if len(children) == 2:
+                        node_result = node_op_pt(grad_dict[children[0]], grad_dict[children[1]])
+                    else:
+                        assert len(children) == 1
+                        node_result = node_op_pt(grad_dict[children[0]])
+                    grad_dict[i] = node_result
+
+            h_X = torch.stack([grad_dict[i] for i in self.outp_nodes])
+            h_X = torch.permute(h_X, (1, 2, 0))
+
+            if h_X.requires_grad:
+                # shape: r x n x N x inps
+                h_X_grad = []
+                for i in range(h_X.shape[2]):
+                    part_grad = torch.autograd.grad(h_X[:, :, i], X_tensor, grad_outputs=h_X[:,:,i].data.new(h_X[:,:,i].shape).fill_(1), create_graph=True)[0]
+                    h_X_grad.append(part_grad.detach().numpy())
+                h_X_grad = np.stack(h_X_grad)
+                h_X_grad = np.transpose(h_X_grad, (1, 0, 2, 3))
+            else:
+                h_X_grad = np.zeros((h_X.shape[0], h_X.shape[2], h_X.shape[1], X.shape[1]))
+
+            if not vec:
+                return final_result[0], h_X_grad[0]
+            else:
+                return final_result, h_X_grad
+
+        else:
             if not vec:
                 return final_result[0]
             else:
