@@ -414,7 +414,7 @@ def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 100
                 
     return build_orders
 
-def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid') -> tuple:
+def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid_zoom', loss_thresh:float = None) -> tuple:
     '''
     Dummy function. Optimizes for constants.
 
@@ -423,26 +423,41 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
         X... input for DAG
         loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
         opt_mode... one of {pool, opt, grid, grid_opt, grid_zoom}
+        loss_thresh... only set in multiprocessing context - to communicate between processes
 
     @Returns:
         tuple of consts = array of optimized constants, loss = float of loss
     '''
-    assert opt_mode in ['pool', 'opt', 'grid', 'grid_opt', 'grid_zoom'], 'Mode has to be one of {pool, opt, grid, grid_opt}'
+    evaluate = True
+    if loss_thresh is not None:
+        # we are in parallel mode
+        global stop_var
+        evaluate = not bool(stop_var)
 
-    if opt_mode == 'pool':
-        consts, loss = get_consts_pool(cgraph, X, loss_fkt)
-    elif opt_mode == 'opt':
-        consts, loss = get_consts_opt(cgraph, X, loss_fkt)
-    elif opt_mode == 'grid':
-        consts, loss = get_consts_grid(cgraph, X, loss_fkt)
-    elif opt_mode == 'grid_zoom':
-        consts, loss = get_consts_grid_zoom(cgraph, X, loss_fkt)
-    elif opt_mode == 'grid_opt':
-        consts, loss = get_consts_grid(cgraph, X, loss_fkt)
-        consts, loss = get_consts_opt(cgraph, X, loss_fkt, c_start=consts)
-    return consts, loss
+    if evaluate:
 
-def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid', filter_func:callable = lambda x: True) -> tuple:
+        assert opt_mode in ['pool', 'opt', 'grid', 'grid_opt', 'grid_zoom'], 'Mode has to be one of {pool, opt, grid, grid_opt}'
+
+        if opt_mode == 'pool':
+            consts, loss = get_consts_pool(cgraph, X, loss_fkt)
+        elif opt_mode == 'opt':
+            consts, loss = get_consts_opt(cgraph, X, loss_fkt)
+        elif opt_mode == 'grid':
+            consts, loss = get_consts_grid(cgraph, X, loss_fkt)
+        elif opt_mode == 'grid_zoom':
+            consts, loss = get_consts_grid_zoom(cgraph, X, loss_fkt)
+        elif opt_mode == 'grid_opt':
+            consts, loss = get_consts_grid(cgraph, X, loss_fkt)
+            consts, loss = get_consts_opt(cgraph, X, loss_fkt, c_start=consts)
+
+        if loss_thresh is not None:
+            if loss <= loss_thresh:
+                stop_var = True
+        return consts, loss
+    else:
+        return np.array([]), np.inf
+        
+def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid', loss_thresh:float = None) -> tuple:
     '''
     Given a build order (output of get_build_orders), tests all possible assignments of operators.
 
@@ -454,7 +469,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
         X... input for DAGs
         loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
         opt_mode... one of {pool, opt, grid, grid_opt}
-        filter_func... function that takes order and returns True if it is a valid order
+        loss_thresh... only set in multiprocessing context - to communicate between processes
         
     @Returns:
         tuple:
@@ -463,36 +478,33 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
             ops... list of ops that were tried
     '''
 
-    if filter_func(order):
-        bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
-        un_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 1]
+    
+    bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
+    un_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 1]
 
-        outp_nodes = [m + k + i for i in range(n)]
-        op_spaces = []
-        for node, parents in order:
-            if len(parents) == 2:
-                op_spaces.append(bin_ops)
+    outp_nodes = [m + k + i for i in range(n)]
+    op_spaces = []
+    for node, parents in order:
+        if len(parents) == 2:
+            op_spaces.append(bin_ops)
+        else:
+            if node in outp_nodes:
+                op_spaces.append(un_ops)
             else:
-                if node in outp_nodes:
-                    op_spaces.append(un_ops)
-                else:
-                    op_spaces.append([op for op in un_ops if op != '='])
-                
+                op_spaces.append([op for op in un_ops if op != '='])
+            
 
-        ret_consts = []
-        ret_losses = []
-        ret_ops = []
-        for ops in itertools.product(*op_spaces):
-            cgraph = build_dag(order, ops, m, n, k)
-            consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode)
-            ret_consts.append(consts)
-            ret_losses.append(loss)
-            ret_ops.append(ops)
+    ret_consts = []
+    ret_losses = []
+    ret_ops = []
+    for ops in itertools.product(*op_spaces):
+        cgraph = build_dag(order, ops, m, n, k)
+        consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
+        ret_consts.append(consts)
+        ret_losses.append(loss)
+        ret_ops.append(ops)
 
-        return ret_consts, ret_losses, ret_ops
-
-    else:
-        return [], [], []
+    return ret_consts, ret_losses, ret_ops
 
 def sample_graph(m:int, n:int, k:int, n_calc_nodes:int) -> comp_graph.CompGraph:
     '''
@@ -589,6 +601,10 @@ def sample_graph(m:int, n:int, k:int, n_calc_nodes:int) -> comp_graph.CompGraph:
 
 
 # Search Methods
+
+def init_process(early_stop):
+    global stop_var
+    stop_var = early_stop 
 
 def is_pickleable(x:object) -> bool:
     '''
@@ -699,13 +715,13 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             if early_stop:
                 break
     else:
-        args = [[order, m, n, k, X, loss_fkt, opt_mode] for order in orders]
+        args = [[order, m, n, k, X, loss_fkt, opt_mode, stop_thresh] for order in orders]
         if verbose == 2:
             pbar = tqdm(args, total = len(args))
         else:
             pbar = args
 
-        with ctx.Pool(n_processes) as pool:
+        with ctx.Pool(processes=n_processes, initializer=init_process, initargs=(early_stop,)) as pool:
             pool_results = pool.starmap(evaluate_build_order, pbar)
         for i, (consts, losses, ops) in enumerate(pool_results):
             for c, loss, op in zip(consts, losses, ops):
@@ -837,14 +853,17 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
             if loss <= stop_thresh:
                 break
     else:
-        args = [[cgraph, X, loss_fkt, opt_mode] for cgraph in cgraphs]
+
+        early_stop = False
+        args = [[cgraph, X, loss_fkt, opt_mode, stop_thresh] for cgraph in cgraphs]
         if verbose == 2:
             pbar = tqdm(args, total = len(args))
         else:
             pbar = args
-
-        with ctx.Pool(n_processes) as pool:
+        with ctx.Pool(processes=n_processes, initializer=init_process, initargs=(early_stop,)) as pool:
             pool_results = pool.starmap(evaluate_cgraph, pbar)
+
+
         for i, (c, loss) in enumerate(pool_results):
             if loss <= loss_thresh:
                 if unique_loss:
