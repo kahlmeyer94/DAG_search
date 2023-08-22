@@ -43,7 +43,7 @@ def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, t
                     'opt_mode' : 'grid_zoom',
                     'verbose' : 2,
                     'max_orders' : 100000, 
-                    'stop_thresh' : 1e-4
+                    'stop_thresh' : 1e-6
                 }
                 res = dag_search.exhaustive_search(**params)
             else:
@@ -59,7 +59,7 @@ def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, t
                     'opt_mode' : 'grid_zoom',
                     'verbose' : 2,
                     'n_samples' : 100000,
-                    'stop_thresh' : 1e-4
+                    'stop_thresh' : 1e-6
                     
                 }
                 res = dag_search.sample_search(**params)
@@ -89,9 +89,9 @@ if __name__ == '__main__':
     np.random.seed(0)
     processes = 5
 
-    #recovery_experiment('Nguyen', mode = 'sampling', k = 1, topk = 5, processes=processes)
-    #recovery_experiment('Strogatz', mode = 'sampling', k = 1, topk = 5, processes=processes)
-    #recovery_experiment('Feynman', mode = 'sampling', k = 1, topk = 5, processes=processes)
+    recovery_experiment('Nguyen', mode = 'sampling', k = 1, topk = 5, processes=processes)
+    recovery_experiment('Strogatz', mode = 'sampling', k = 1, topk = 5, processes=processes)
+    recovery_experiment('Feynman', mode = 'sampling', k = 1, topk = 5, processes=processes)
 
     recovery_experiment('Nguyen', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
     recovery_experiment('Strogatz', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
