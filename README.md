@@ -4,4 +4,5 @@ Systematically searching the space of small directed, acyclic graphs (DAGs).
 
 ### TODO:
 
-- Early Stopping in multiprocessing `pool.starmap`
+- sklearn interface
+- SRBench submission?
