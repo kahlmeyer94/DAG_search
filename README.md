@@ -17,5 +17,6 @@ pip install -r requirements.txt
 
 ... do stuff here
 
+conda deactivate
 conda remove -n testenv --all
 ```
