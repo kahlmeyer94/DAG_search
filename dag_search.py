@@ -2,7 +2,6 @@
 Operations for combining computational graphs
 '''
 import numpy as np
-from numpy.random import default_rng
 import itertools
 import config
 import warnings
@@ -10,13 +9,12 @@ from scipy.optimize import minimize
 import comp_graph
 from tqdm import tqdm
 import pickle
-from sympy import simplify
-from timeit import default_timer as timer
 import multiprocessing
-from multiprocessing import Pool
+import sklearn
 
+########################
 # Loss Function + Optimizing constants
-
+########################
 class DAG_Loss_fkt(object):
     '''
     Abstract class for Loss function
@@ -232,8 +230,9 @@ def get_consts_pool(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss
         return best_c, best_loss
     return np.array([]), loss_fkt(X, cgraph, np.array([]))
 
-
+########################
 # DAG creation
+########################
 
 def get_pre_order(order:list, node:int, inp_nodes:list, inter_nodes:list, outp_nodes:list) -> tuple:
     '''
@@ -599,8 +598,9 @@ def sample_graph(m:int, n:int, k:int, n_calc_nodes:int) -> comp_graph.CompGraph:
     # 3. create cgraph
     return build_dag(order, node_ops, m, n, k)
 
-
+########################
 # Search Methods
+########################
 
 def init_process(early_stop):
     global stop_var
@@ -895,3 +895,69 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
         'losses' : top_losses}
 
     return ret
+
+
+########################
+# Sklearn Interface
+########################
+
+
+class SDS(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+    '''
+    SDS: Symbolic DAG-Search
+
+    Sklearn interface for exhaustive search.
+    '''
+
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(1e5), random_state:int = None):
+
+        self.k = k
+        self.n_calc_nodes = n_calc_nodes
+        self.max_orders = max_orders
+
+        self.cgraph = None
+        self.consts = None
+        self.random_state = random_state
+
+    def fit(self, X:np.ndarray, y:np.ndarray, processes:int = 1, verbose:int = 1):
+        assert len(y.shape) == 1, f'y must be 1-dimensional (current shape: {y.shape})'
+
+        if self.random_state is not None:
+            np.random.seed(self.random_state)
+
+        y_part = y.reshape(-1, 1)
+        m = X.shape[1]
+        n = 1
+        loss_fkt = MSE_loss_fkt(y_part)
+        params = {
+            'X' : X,
+            'n_outps' : n,
+            'loss_fkt' : loss_fkt,
+            'k' : self.k,
+            'n_calc_nodes' : self.n_calc_nodes,
+            'n_processes' : processes,
+            'topk' : 1,
+            'opt_mode' : 'grid_zoom',
+            'verbose' : verbose,
+            'max_orders' : self.max_orders, 
+            'stop_thresh' : 1e-4
+        }
+        res = exhaustive_search(**params)
+        if verbose > 0:
+            print(f'Found graph with loss {res["losses"][0]}')
+        self.cgraph = res['graphs'][0]
+        self.consts = res['consts'][0]
+
+    def predict(self, X):
+        assert self.cgraph is not None, 'No graph found yet. Call .fit first!'
+        pred = self.cgraph.evaluate(X, c = self.consts)
+        return pred[:, 0]
+
+    def model(self):
+        assert self.cgraph is not None, 'No graph found yet. Call .fit first!'
+        exprs = self.cgraph.evaluate_symbolic(c = self.consts)
+        return exprs[0]
+
+    def complexity(self):
+        assert self.cgraph is not None, 'No graph found yet. Call .fit first!'
+        return self.cgraph.n_operations()
