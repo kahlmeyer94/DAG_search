@@ -2,10 +2,20 @@
 Systematically searching the space of small directed, acyclic graphs (DAGs).
 
 
-### TODO:
+## TODO:
 
 - requirements.txt
-- sklearn interface
-- SRBench submission?
+- installation.sh/setup.py
+- SRBench submission
 
-### Installation:
+## Installation
+
+```
+conda create --name testenv python=3.9.12
+conda activate testenv
+pip install -r requirements.txt
+
+... do stuff here
+
+conda remove -n testenv --all
+```
