@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import torch
 
 
-import DAG_search.config as config
+from DAG_search import config
 
 
 class CompGraph():

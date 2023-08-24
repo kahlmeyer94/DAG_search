@@ -11,8 +11,8 @@ import multiprocessing
 import sklearn
 
 
-import DAG_search.config as config
-import DAG_search.comp_graph as comp_graph
+from DAG_search import config
+from DAG_search import comp_graph
 
 ########################
 # Loss Function + Optimizing constants

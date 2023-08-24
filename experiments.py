@@ -1,14 +1,21 @@
 import numpy as np
 import pickle
-import utils
 
 
-import DAG_search.dag_search as dag_search
+from DAG_search import utils
+from DAG_search import dag_search
 
 
 def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, topk : int = 5, processes : int = 1):
-    load_path = f'./datasets/{ds_name}/tasks.p'
-    save_path = f'./datasets/{ds_name}/{mode}_results.p'
+    '''
+    Simple Experiment to estimate the Recovery rate of DAG-search.
+
+    @Params:
+        ds_name... Name of dataset
+    '''
+    
+    load_path = f'datasets/{ds_name}/tasks.p'
+    save_path = f'datasets/{ds_name}/{mode}_results.p'
 
     results = {}
     with open(load_path, 'rb') as handle:
@@ -44,7 +51,7 @@ def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, t
                     'topk' : topk,
                     'opt_mode' : 'grid_zoom',
                     'verbose' : 2,
-                    'max_orders' : 100000, 
+                    'max_orders' : int(5e5), 
                     'stop_thresh' : 1e-6
                 }
                 res = dag_search.exhaustive_search(**params)
@@ -60,7 +67,7 @@ def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, t
                     'topk' : topk,
                     'opt_mode' : 'grid_zoom',
                     'verbose' : 2,
-                    'n_samples' : 100000,
+                    'n_samples' : 10000,
                     'stop_thresh' : 1e-6
                     
                 }
@@ -80,7 +87,9 @@ def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, t
 
         results[problem] = {
             'recovery' : total_rec,
-            'exprs' : est_exprs
+            'exprs' : est_exprs,
+            'graphs' : best_graphs,
+            'consts' : best_consts
         }
 
         with open(save_path, 'wb') as handle:
@@ -89,12 +98,14 @@ def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, t
 if __name__ == '__main__':
 
     np.random.seed(0)
-    processes = 5
+    processes = 10
 
-    recovery_experiment('Nguyen', mode = 'sampling', k = 1, topk = 5, processes=processes)
-    recovery_experiment('Strogatz', mode = 'sampling', k = 1, topk = 5, processes=processes)
-    recovery_experiment('Feynman', mode = 'sampling', k = 1, topk = 5, processes=processes)
+    if True:
+        recovery_experiment('Nguyen', mode = 'sampling', k = 1, topk = 5, processes=processes)
+        recovery_experiment('Strogatz', mode = 'sampling', k = 1, topk = 5, processes=processes)
+        recovery_experiment('Feynman', mode = 'sampling', k = 1, topk = 5, processes=processes)
 
-    recovery_experiment('Nguyen', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
-    recovery_experiment('Strogatz', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
-    recovery_experiment('Feynman', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
+    if True:
+        recovery_experiment('Nguyen', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
+        recovery_experiment('Strogatz', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
+        recovery_experiment('Feynman', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
