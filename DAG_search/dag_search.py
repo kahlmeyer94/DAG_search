@@ -979,11 +979,11 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         assert self.cgraph is not None, 'No graph found yet. Call .fit first!'
         if return_grad:
             pred, grad = self.cgraph.evaluate(X, c = self.consts, return_grad = return_grad)
-            return pred[:, 0]
+            return pred[:, 0], grad[0]
 
         else:
             pred = self.cgraph.evaluate(X, c = self.consts, return_grad = return_grad)
-            return pred[:, 0], grad[0]
+            return pred[:, 0]
 
     def model(self):
         '''
