@@ -911,7 +911,7 @@ class SDS(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(1e5), random_state:int = None):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(1e5), random_state:int = None, **kwargs):
 
         self.k = k
         self.n_calc_nodes = n_calc_nodes
@@ -942,7 +942,7 @@ class SDS(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'opt_mode' : 'grid_zoom',
             'verbose' : verbose,
             'max_orders' : self.max_orders, 
-            'stop_thresh' : 1e-4
+            'stop_thresh' : 1e-6
         }
         res = exhaustive_search(**params)
         if verbose > 0:
