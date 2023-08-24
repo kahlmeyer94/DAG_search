@@ -1,7 +1,9 @@
 import numpy as np
 import pickle
-import dag_search
 import utils
+
+
+import DAG_search.dag_search as dag_search
 
 
 def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, topk : int = 5, processes : int = 1):

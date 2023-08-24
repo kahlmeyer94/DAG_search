@@ -3,14 +3,16 @@ Operations for combining computational graphs
 '''
 import numpy as np
 import itertools
-import config
 import warnings
 from scipy.optimize import minimize
-import comp_graph
 from tqdm import tqdm
 import pickle
 import multiprocessing
 import sklearn
+
+
+import DAG_search.config as config
+import DAG_search.comp_graph as comp_graph
 
 ########################
 # Loss Function + Optimizing constants

@@ -3,7 +3,6 @@ The computational graph class
 '''
 
 import numpy as np
-import config
 import copy
 import warnings
 import sympy
@@ -12,6 +11,9 @@ from tqdm import tqdm
 import networkx as nx
 import matplotlib.pyplot as plt
 import torch
+
+
+import DAG_search.config as config
 
 
 class CompGraph():
