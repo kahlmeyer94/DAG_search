@@ -904,7 +904,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 ########################
 
 
-class SDS(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     SDS: Symbolic DAG-Search
 
