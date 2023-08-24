@@ -5,8 +5,8 @@ import utils
 
 
 def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, topk : int = 5, processes : int = 1):
-    load_path = f'datasets/{ds_name}/tasks.p'
-    save_path = f'datasets/{ds_name}/{mode}_results.p'
+    load_path = f'./datasets/{ds_name}/tasks.p'
+    save_path = f'./datasets/{ds_name}/{mode}_results.p'
 
     results = {}
     with open(load_path, 'rb') as handle:
