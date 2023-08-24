@@ -10,7 +10,6 @@ import pickle
 import multiprocessing
 import sklearn
 
-
 from DAG_search import config
 from DAG_search import comp_graph
 
@@ -913,6 +912,14 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
     def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(1e5), random_state:int = None, **kwargs):
 
+        '''
+        @Params:
+            k.... number of constants
+            n_calc_nodes... number of possible intermediate nodes
+            max_orders... maximum number of expression - skeletons in search
+            random_state... for reproducibility
+
+        '''
         self.k = k
         self.n_calc_nodes = n_calc_nodes
         self.max_orders = max_orders
@@ -922,6 +929,13 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.random_state = random_state
 
     def fit(self, X:np.ndarray, y:np.ndarray, processes:int = 1, verbose:int = 1):
+        '''
+        Fits a model on given regression data.
+        @Params:
+            X... input data (shape n_samples x inp_dim)
+            y... output data (shape n_samples)
+            processes... number of processes for evaluation
+        '''
         assert len(y.shape) == 1, f'y must be 1-dimensional (current shape: {y.shape})'
 
         if self.random_state is not None:
@@ -950,16 +964,38 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.cgraph = res['graphs'][0]
         self.consts = res['consts'][0]
 
-    def predict(self, X):
+    def predict(self, X:np.ndarray, return_grad : bool = False):
+        '''
+        Predicts values for given samples.
+
+        @Params:
+            X... input data (shape n_samples x inp_dim)
+            return_grad... whether to return gradient wrt. input at X
+
+        @Returns:
+            predictions (shape n_samples)
+            [if wanted: gradient (shape n_samples x inp_dim)]
+        '''
         assert self.cgraph is not None, 'No graph found yet. Call .fit first!'
-        pred = self.cgraph.evaluate(X, c = self.consts)
-        return pred[:, 0]
+        if return_grad:
+            pred, grad = self.cgraph.evaluate(X, c = self.consts, return_grad = return_grad)
+            return pred[:, 0]
+
+        else:
+            pred = self.cgraph.evaluate(X, c = self.consts, return_grad = return_grad)
+            return pred[:, 0], grad[0]
 
     def model(self):
+        '''
+        Evaluates symbolic expression.
+        '''
         assert self.cgraph is not None, 'No graph found yet. Call .fit first!'
         exprs = self.cgraph.evaluate_symbolic(c = self.consts)
         return exprs[0]
 
     def complexity(self):
+        '''
+        Complexity of expression (number of calculations)
+        '''
         assert self.cgraph is not None, 'No graph found yet. Call .fit first!'
         return self.cgraph.n_operations()
