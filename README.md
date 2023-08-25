@@ -5,8 +5,6 @@ Systematically searching the space of small directed, acyclic graphs (DAGs).
 ## TODO:
 
 - SRBench submission
-- good Hyperparams (speed/recovery tradeoff)
-- Tutorial
 
 ## Installation
 
