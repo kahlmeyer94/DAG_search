@@ -14,7 +14,8 @@ requirements = [
     'stopit',
     'sympy',
     'torch',
-    'tqdm'
+    'tqdm',
+    'zss'
 ]
 
 
@@ -24,7 +25,7 @@ setup(
     version=1.0,
     description = "An open source python library symbolic regression based on searching the space of DAGs.",
     long_description = readme,
-    license='MIT'
+    license='MIT',
     author="Paul Kahlmeyer",
     author_email='paul.kahlmeyer@uni-jena.de',
     url = 'https://github.com/kahlmeyer94/DAG_search',

@@ -7,3 +7,4 @@ stopit==1.1.2
 sympy==1.10.1
 torch==2.0.1
 tqdm==4.62.3
+zss

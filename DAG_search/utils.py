@@ -1,6 +1,8 @@
 import stopit
+import zss
 import sympy
 import traceback
+from DAG_search import config
 
 #####################################
 # Symbolic Checks
@@ -156,3 +158,161 @@ def round_floats(ex1, max_v:int = 1000):
             found = False
         ex1 = ex2
     return ex1
+
+
+#####################################
+# Symbolic Distance Measures
+#####################################
+
+# Symbolic distance DFS comparison
+def get_dfs(graph, idx):
+    children, op = graph.node_dict[idx]
+    ret = []
+    if len(children) == 0:
+        if op.startswith('c'):
+            ret = ['const']
+        else:
+            ret = [op]
+    else:
+        ret = [op]
+        for child in children:
+            ret += get_dfs(graph, child)
+    return ret
+
+def lcsubstring_length(a, b):
+    # found here: https://stackoverflow.com/questions/24547641/python-length-of-longest-common-subsequence-of-lists
+    table = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    longest = 0
+    for i, ca in enumerate(a, 1):
+        for j, cb in enumerate(b, 1):
+            if ca == cb:
+                length = table[i][j] = table[i - 1][j - 1] + 1
+                longest = max(longest, length)
+    return longest
+
+def dfs_ratio(graph1, graph2):
+    
+    outp_idx1 = graph1.inp_dim + graph1.n_consts
+    outp_idx2 = graph2.inp_dim + graph2.n_consts
+
+    dfs1 = get_dfs(graph1, outp_idx1)
+    dfs2 = get_dfs(graph2, outp_idx2)
+    return (lcsubstring_length(dfs1, dfs2) - 1)/max(len(dfs1), len(dfs2))
+
+
+# Symbolic distance subexpression comparison
+def get_subexprs(graph):
+    X = [sympy.symbols(f'x_{i}', real = True) for i in range(graph.inp_dim)]
+    c = [sympy.symbols(f'c_{i}', real = True) for i in range(graph.n_consts)]
+    ret_nodes = graph.outp_nodes
+
+    # we assume that eval order is valid
+    k = graph.inp_dim + graph.n_consts
+
+    res_dict = {i : None for i in graph.node_dict}
+    # inputs        
+    for i in range(graph.inp_dim):
+        res_dict[i] = X[i]
+
+    for i, const in enumerate(c):
+        res_dict[i + graph.inp_dim] = const
+
+    # others
+    for i in graph.eval_order[k:]:
+        children, node_op = graph.node_dict[i]
+        node_op = config.NODE_OPS_SYMB[node_op]
+        child_results = [res_dict[j] for j in children]
+
+        node_result = child_results[0]
+
+        if len(child_results) > 1:
+            for j in range(1, len(child_results)):
+                node_result = node_op(node_result, child_results[j])
+        else:
+            node_result = node_op(node_result)
+
+        res_dict[i] = node_result
+    
+    ret_dict = {}
+    for i in res_dict:
+        ret_dict[i] = str(res_dict[i])
+    return ret_dict
+
+def get_depths(graph):
+    k = graph.inp_dim + graph.n_consts
+    depth_dict = {i : 0 for i in graph.node_dict}
+
+    for i in graph.eval_order[k:]:
+        children, node_op = graph.node_dict[i]
+        node_depth = max([depth_dict[j] for j in children])
+        if node_op != '=':
+            node_depth += 1
+        depth_dict[i] = node_depth
+    return depth_dict
+
+def subexpr_ratio(graph1, graph2):
+    subexprs1 = get_subexprs(graph1)
+    subexprs2 = get_subexprs(graph2)
+    
+    
+    depths1 = get_depths(graph1)
+    depths2 = get_depths(graph2)
+    d1 = graph1.depth()
+    d2 = graph2.depth()
+    
+    
+    exprs1 = set([subexprs1[i] for i in subexprs1])
+    exprs2 = set([subexprs2[i] for i in subexprs2])
+    common_exprs = list(exprs1 & exprs2)
+    
+    scores = []
+    for expr in common_exprs:
+        
+        # find depth in graph1
+        tmp = []
+        for i1 in subexprs1:
+            if subexprs1[i1] == expr:
+                tmp.append(depths1[i1])
+        depth1 = min(tmp)
+        
+        
+        # find depth in graph2
+        tmp = []
+        for i1 in subexprs2:
+            if subexprs2[i1] == expr:
+                tmp.append(depths2[i1])
+        depth2 = min(tmp)
+
+        score = min(depth1/(d1 + 1), depth2/(d2 + 1))
+        scores.append(score)
+        
+    if len(scores) == 0:
+        return 0.0
+    else:
+        return max(scores)
+    
+
+# Zhang-Shasha tree edit distance
+# https://epubs.siam.org/doi/10.1137/0218082
+
+def graph2trees(graph):
+    trees = []
+    for i in range(graph.outp_dim):
+        root_idx = i + graph.inp_dim + graph.n_consts
+        trees.append(get_tree(graph, root_idx))
+    return trees
+
+def get_tree(graph, idx):
+    children, op = graph.node_dict[idx]
+    if len(children) == 0:
+        return zss.Node(op)
+    else:
+        ret = zss.Node(op)
+        for child in children:
+            ret.addkid(get_tree(graph, child))
+        return ret
+    
+def edit_distance(graph1, graph2):
+    tree1 = graph2trees(graph1)[0]
+    tree2 = graph2trees(graph2)[0]
+    return zss.simple_distance(tree1, tree2)
