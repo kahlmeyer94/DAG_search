@@ -1,4 +1,8 @@
-# SDS: Symbolic DAG Search
+<p align="center">
+<img src="images/logo.png" width=750/>
+</p>
+
+# Symbolic DAG Search
 Systematically searching the space of small directed, acyclic graphs (DAGs).
 
 
