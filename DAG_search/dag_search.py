@@ -928,7 +928,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.consts = None
         self.random_state = random_state
 
-    def fit(self, X:np.ndarray, y:np.ndarray, processes:int = 1, verbose:int = 1):
+    def fit(self, X:np.ndarray, y:np.ndarray, processes:int = 1, verbose:int = 2):
         '''
         Fits a model on given regression data.
         @Params:
