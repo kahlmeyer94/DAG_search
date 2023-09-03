@@ -910,7 +910,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 1000, **kwargs):
 
         '''
         @Params:
@@ -918,17 +918,24 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             n_calc_nodes... number of possible intermediate nodes
             max_orders... maximum number of expression - skeletons in search
             random_state... for reproducibility
-
+            processes... number of processes for multiprocessing
+            max_samples... maximum number of samples on which to fit
         '''
         self.k = k
         self.n_calc_nodes = n_calc_nodes
         self.max_orders = max_orders
+        self.max_samples = max_samples
+
+        if processes is None:
+            self.processes = multiprocessing.cpu_count()//2
+        else:
+            self.processes = max(min(self.processes, multiprocessing.cpu_count()), 1)
 
         self.cgraph = None
         self.consts = None
         self.random_state = random_state
 
-    def fit(self, X:np.ndarray, y:np.ndarray, processes:int = 1, verbose:int = 2):
+    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
         Fits a model on given regression data.
         @Params:
@@ -941,6 +948,13 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         if self.random_state is not None:
             np.random.seed(self.random_state)
 
+        if len(X) > self.max_samples:
+            sub_idx = np.arange(len(X))
+            np.random.shuffle(sub_idx)
+            sub_idx = sub_idx[:self.max_samples]
+            X = X[sub_idx]
+            y = y[sub_idx]
+
         y_part = y.reshape(-1, 1)
         m = X.shape[1]
         n = 1
@@ -951,7 +965,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'loss_fkt' : loss_fkt,
             'k' : self.k,
             'n_calc_nodes' : self.n_calc_nodes,
-            'n_processes' : processes,
+            'n_processes' : self.processes,
             'topk' : 1,
             'opt_mode' : 'grid_zoom',
             'verbose' : verbose,
