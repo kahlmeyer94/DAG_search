@@ -24,6 +24,11 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
     load_path = f'datasets/{ds_name}/tasks.p'
     save_path = f'results/{ds_name}/{regressor_name}_results.p'
 
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
+
     results = {}
     with open(load_path, 'rb') as handle:
         task_dict = pickle.load(handle)
@@ -185,14 +190,14 @@ if __name__ == '__main__':
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         regressors = {
-            'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
-            'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
-            #'dsr' : (regressors.DSR(), True),
             'operon' : (regressors.Operon(random_state = rand_state), True),
+            'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'linreg' : (regressors.LinReg(), True),
             'polyreg2' : (regressors.PolyReg(degree= 2), True),
             'polyreg3' : (regressors.PolyReg(degree= 3), True),
-            'MLP' : (regressors.MLP(random_state = rand_state), False)
+            'MLP' : (regressors.MLP(random_state = rand_state), False),
+            'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
+            #'dsr' : (regressors.DSR(), True),
         }
         for ds_name in problems:
             for regressor_name in regressors:
