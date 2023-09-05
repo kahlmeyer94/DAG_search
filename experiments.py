@@ -5,6 +5,7 @@ from tqdm import tqdm
 from sklearn.metrics import r2_score
 import os
 import regressors
+from timeit import default_timer as timer
 
 from DAG_search import utils
 from DAG_search import dag_search
@@ -43,13 +44,18 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
         all_rec = []
         all_pred = []
         all_expr = []
+        all_times = []
 
 
         for idx in range(y.shape[1]):
             expr_true = exprs_true[idx]
             y_part = y[:, idx]
 
+            s_time = timer()
             regressor.fit(X, y_part)
+            e_time = timer()
+            all_times.append(e_time - s_time)
+
             pred = regressor.predict(X)
             all_pred.append(pred)
 
@@ -66,7 +72,8 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
         results[problem] = {
             'recovery' : all_rec,
             'exprs' : all_expr,
-            'predictions' : all_pred
+            'predictions' : all_pred,
+            'times' : all_times
         }
 
         with open(save_path, 'wb') as handle:
@@ -191,11 +198,11 @@ if __name__ == '__main__':
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         regs = {
             'operon' : (regressors.Operon(random_state = rand_state), True),
-            'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'linreg' : (regressors.LinReg(), True),
             'polyreg2' : (regressors.PolyReg(degree= 2), True),
             'polyreg3' : (regressors.PolyReg(degree= 3), True),
             'MLP' : (regressors.MLP(random_state = rand_state), False),
+            'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
         }
