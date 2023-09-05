@@ -3,21 +3,26 @@ import pickle
 from scipy.stats import pearsonr
 from tqdm import tqdm
 from sklearn.metrics import r2_score
+import os
+import regressors
 
 from DAG_search import utils
 from DAG_search import dag_search
 
 
-def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, topk : int = 5, processes : int = 1):
+def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool):
     '''
-    Simple Experiment to estimate the Recovery rate of DAG-search.
+    Simple Experiment to estimate the Recovery rate of a Regressor.
 
     @Params:
         ds_name... Name of dataset
+        regressor... Scikit learn style regressor (with .fit(X, y) and .predict(X))
+        regressor_name... name of regressor (for saving)
+        is_symb... if regressor is symbolic
     '''
     
     load_path = f'datasets/{ds_name}/tasks.p'
-    save_path = f'results/{ds_name}/{mode}_results.p'
+    save_path = f'results/{ds_name}/{regressor_name}_results.p'
 
     results = {}
     with open(load_path, 'rb') as handle:
@@ -26,79 +31,43 @@ def recovery_experiment(ds_name : str, mode : str = 'exhaustive', k : int = 1, t
 
     for problem in problems:
         print('####################')
-        print(problem)
+        print(f'{regressor_name} on {problem}')
         print('####################')
 
         X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
-        total_rec = []
-        best_graphs = []
-        best_consts = []
+        all_rec = []
+        all_pred = []
+        all_expr = []
+
+
         for idx in range(y.shape[1]):
             expr_true = exprs_true[idx]
             y_part = y[:, idx].reshape(-1, 1)
 
-            m = X.shape[1]
-            n = 1
-            loss_fkt = dag_search.MSE_loss_fkt(y_part)
-
-            if mode == 'exhaustive':
-                # exhaustive search
-                params = {
-                    'X' : X,
-                    'n_outps' : n,
-                    'loss_fkt' : loss_fkt,
-                    'k' : k,
-                    'n_calc_nodes' : 4,
-                    'n_processes' : processes,
-                    'topk' : topk,
-                    'opt_mode' : 'grid_zoom',
-                    'verbose' : 2,
-                    'max_orders' : int(5e5), 
-                    'stop_thresh' : 1e-6
-                }
-                res = dag_search.exhaustive_search(**params)
-            else:
-                # sample search
-                params = {
-                    'X' : X,
-                    'n_outps' : n,
-                    'loss_fkt' : loss_fkt,
-                    'k' : k,
-                    'n_calc_nodes' : 5,
-                    'n_processes' : processes,
-                    'topk' : topk,
-                    'opt_mode' : 'grid_zoom',
-                    'verbose' : 2,
-                    'n_samples' : 10000,
-                    'stop_thresh' : 1e-6
-                    
-                }
-                res = dag_search.sample_search(**params)
+            regressor.fit(X, y_part)
+            pred = regressor.predict(X)
+            all_pred.append(pred)
 
 
-            recs = []
-            for graph, consts in zip(res['graphs'], res['consts']):
-                expr_est = graph.evaluate_symbolic(c = consts)[0]
+            if is_symb:
+                expr_est = regressor.model()
+                all_expr.append(expr_est)
                 rec = utils.symb_eq(expr_est, expr_true) 
-                recs.append(rec)
-            total_rec.append(np.any(recs))
-            best_graphs.append(res['graphs'][0])
-            best_consts.append(res['consts'][0])
-        
-        est_exprs = [graph.evaluate_symbolic(c = consts) for graph, consts in zip(best_graphs, best_consts)]
+            else:
+                rec = False
+            all_rec.append(rec)
 
+    
         results[problem] = {
-            'recovery' : total_rec,
-            'exprs' : est_exprs,
-            'graphs' : best_graphs,
-            'consts' : best_consts
+            'recovery' : all_rec,
+            'exprs' : all_expr,
+            'predictions' : all_pred
         }
 
         with open(save_path, 'wb') as handle:
             pickle.dump(results, handle)
 
-
-def measure_experiment(random_state = None):
+def proximity_experiment(random_state = None):
     # sample graphs
     save_path_dists = f'results/distance_dict.p'
     save_path_corr = f'results/corr_matrix.npy'
@@ -211,18 +180,25 @@ def measure_experiment(random_state = None):
 
 if __name__ == '__main__':
 
-    np.random.seed(0)
-    processes = 10
-
+    # recovery experiment
     if True:
-        recovery_experiment('Nguyen', mode = 'sampling', k = 1, topk = 5, processes=processes)
-        recovery_experiment('Strogatz', mode = 'sampling', k = 1, topk = 5, processes=processes)
-        recovery_experiment('Feynman', mode = 'sampling', k = 1, topk = 5, processes=processes)
+        problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
+        regressors = {
+            'DAGSearch' : (dag_search.DAGRegressor(), True),
+            'gplearn' : (regressors.GPlearn(), True),
+            'dsr' : (regressors.DSR(), True),
+            'operon' : (regressors.Operon(), True),
+            'linreg' : (regressors.LinReg(), True),
+            'polyreg2' : (regressors.PolyReg(degree= 2), True),
+            'polyreg3' : (regressors.PolyReg(degree= 3), True),
+            'MLP' : (regressors.MLP(), False)
+        }
+        for ds_name in problems:
+            for regressor_name in regressors:
+                regressor, is_symb = regressors[regressor_name]
+                recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
 
-    if True:
-        recovery_experiment('Nguyen', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
-        recovery_experiment('Strogatz', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
-        recovery_experiment('Feynman', mode = 'exhaustive', k = 1, topk = 5, processes=processes)
 
-    if True:
-        measure_experiment(0)
+    # proximity experiment
+    if False:
+        proximity_experiment(0)
