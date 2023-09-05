@@ -929,7 +929,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         if processes is None:
             self.processes = multiprocessing.cpu_count()//2
         else:
-            self.processes = max(min(self.processes, multiprocessing.cpu_count()), 1)
+            self.processes = max(min(processes, multiprocessing.cpu_count()), 1)
 
         self.cgraph = None
         self.consts = None
