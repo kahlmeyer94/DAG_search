@@ -5,13 +5,14 @@ from tqdm import tqdm
 from sklearn.metrics import r2_score
 import os
 import regressors
+from sklearn.model_selection import train_test_split
 from timeit import default_timer as timer
 
 from DAG_search import utils
 from DAG_search import dag_search
 
 
-def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool):
+def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2):
     '''
     Simple Experiment to estimate the Recovery rate of a Regressor.
 
@@ -20,6 +21,7 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
         regressor... Scikit learn style regressor (with .fit(X, y) and .predict(X))
         regressor_name... name of regressor (for saving)
         is_symb... if regressor is symbolic
+        test_size... share of test data
     '''
     
     load_path = f'datasets/{ds_name}/tasks.p'
@@ -41,23 +43,34 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
         print('####################')
 
         X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+
         all_rec = []
-        all_pred = []
+        all_pred_train = []
+        all_pred_test = []
+        all_y_train = []
+        all_y_test = []
         all_expr = []
         all_times = []
 
 
         for idx in range(y.shape[1]):
             expr_true = exprs_true[idx]
-            y_part = y[:, idx]
+            y_part = y_train[:, idx]
 
             s_time = timer()
-            regressor.fit(X, y_part)
+            regressor.fit(X_train, y_part)
             e_time = timer()
             all_times.append(e_time - s_time)
 
-            pred = regressor.predict(X)
-            all_pred.append(pred)
+            pred = regressor.predict(X_train)
+            all_pred_train.append(pred)
+            all_y_train.append(y_part)
+
+            pred = regressor.predict(X_test)
+            all_pred_test.append(pred)
+            all_y_test.append(y_test[:, idx])
+
 
 
             if is_symb:
@@ -72,7 +85,10 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
         results[problem] = {
             'recovery' : all_rec,
             'exprs' : all_expr,
-            'predictions' : all_pred,
+            'y_train' : all_y_train,
+            'y_test' : all_y_test,
+            'pred_train' : all_pred_train,
+            'pred_test' : all_pred_test,
             'times' : all_times
         }
 
