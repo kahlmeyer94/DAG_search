@@ -2,6 +2,7 @@ import sympy
 import warnings
 import numpy as np
 from tqdm import tqdm
+import itertools
 
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
@@ -130,13 +131,21 @@ class PolyReg():
         return pred
 
     def model(self):
-
         assert self.X is not None
         names = [sympy.symbols(f'x_{i}', real = True) for i in range(self.X.shape[1])]
 
+        X_idxs = np.arange(self.X.shape[1])
+        X_poly = []
+        for degree in range(1, self.degree+1):   
+            poly_idxs = itertools.combinations_with_replacement(X_idxs, degree)
+            for idxs in poly_idxs:
+                prod = 1
+                for i in idxs:
+                    prod = prod*names[i]
+                X_poly.append(prod)
 
         expr = self.regr.intercept_
-        for x_name, alpha in zip(names, self.regr.coef_):
+        for x_name, alpha in zip(X_poly, self.regr.coef_):
             expr += alpha*x_name
         return expr
 
