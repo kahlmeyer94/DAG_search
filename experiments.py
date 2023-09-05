@@ -197,11 +197,11 @@ if __name__ == '__main__':
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         regs = {
-            'operon' : (regressors.Operon(random_state = rand_state), True),
             'linreg' : (regressors.LinReg(), True),
             'polyreg2' : (regressors.PolyReg(degree= 2), True),
             'polyreg3' : (regressors.PolyReg(degree= 3), True),
             'MLP' : (regressors.MLP(random_state = rand_state), False),
+            'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
