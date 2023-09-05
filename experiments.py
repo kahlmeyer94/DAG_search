@@ -189,7 +189,7 @@ if __name__ == '__main__':
     if True:
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        regressors = {
+        regs = {
             'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'linreg' : (regressors.LinReg(), True),
@@ -200,8 +200,8 @@ if __name__ == '__main__':
             #'dsr' : (regressors.DSR(), True),
         }
         for ds_name in problems:
-            for regressor_name in regressors:
-                regressor, is_symb = regressors[regressor_name]
+            for regressor_name in regs:
+                regressor, is_symb = regs[regressor_name]
                 recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
 
     # proximity experiment
