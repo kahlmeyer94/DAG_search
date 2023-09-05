@@ -42,7 +42,7 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
 
         for idx in range(y.shape[1]):
             expr_true = exprs_true[idx]
-            y_part = y[:, idx].reshape(-1, 1)
+            y_part = y[:, idx]
 
             regressor.fit(X, y_part)
             pred = regressor.predict(X)
@@ -182,22 +182,22 @@ if __name__ == '__main__':
 
     # recovery experiment
     if True:
+        rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         regressors = {
-            'DAGSearch' : (dag_search.DAGRegressor(), True),
-            'gplearn' : (regressors.GPlearn(), True),
-            'dsr' : (regressors.DSR(), True),
-            'operon' : (regressors.Operon(), True),
+            'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
+            'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
+            #'dsr' : (regressors.DSR(), True),
+            'operon' : (regressors.Operon(random_state = rand_state), True),
             'linreg' : (regressors.LinReg(), True),
             'polyreg2' : (regressors.PolyReg(degree= 2), True),
             'polyreg3' : (regressors.PolyReg(degree= 3), True),
-            'MLP' : (regressors.MLP(), False)
+            'MLP' : (regressors.MLP(random_state = rand_state), False)
         }
         for ds_name in problems:
             for regressor_name in regressors:
                 regressor, is_symb = regressors[regressor_name]
                 recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
-
 
     # proximity experiment
     if False:
