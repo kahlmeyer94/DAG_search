@@ -126,7 +126,7 @@ class PolyReg():
 
     def predict(self, X):
         assert self.X is not None
-        X_poly = self.poly.fit_transform(self.X)
+        X_poly = self.poly.fit_transform(X)
         pred = self.regr.predict(X_poly)
         return pred
 
