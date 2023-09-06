@@ -273,7 +273,7 @@ def solutions_experiment(topk : int = 10, k : int = 1, n_graphs : int = 10000, r
         
         ratios = []
         rmses = []
-        for problem_idx, (X, y) in enumerate(task_list[:1]): # TODO: change to total list
+        for problem_idx, (X, y) in enumerate(task_list):
             print(f'\nProblem Nr. {problem_idx + 1}\n')
             
             loss_fkt = dag_search.MSE_loss_fkt(y)
@@ -327,9 +327,8 @@ def solutions_experiment(topk : int = 10, k : int = 1, n_graphs : int = 10000, r
             'avg-RMSE' : [x[2] for x in rmses],
         }
         
-    
-    with open(save_path, 'wb') as handle:
-        pickle.dump(res, handle)
+        with open(save_path, 'wb') as handle:
+            pickle.dump(res, handle)
 
 
 if __name__ == '__main__':
