@@ -11,8 +11,7 @@ from timeit import default_timer as timer
 
 from DAG_search import utils
 from DAG_search import dag_search
-import regressors
-
+from regressors import regressors
 
 import networkx as nx
 
@@ -299,9 +298,13 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
         for i, graph1 in tqdm(enumerate(top_graphs), total = len(top_graphs)):
             for j, graph2 in enumerate(top_graphs):
                 if i <= j:
-                    expr1 = graph1.evaluate_symbolic(c = top_consts[i])[0]
-                    expr2 = graph2.evaluate_symbolic(c = top_consts[j])[0]
-                    r = utils.symb_eq(expr1, expr2)
+
+                    if False:
+                        expr1 = graph1.evaluate_symbolic(c = top_consts[i])[0]
+                        expr2 = graph2.evaluate_symbolic(c = top_consts[j])[0]
+                        r = utils.symb_eq(expr1, expr2)
+                    if True:
+                        r = int(utils.edit_distance(graph1, graph2) == 1)
                     #r = utils.edit_distance(graph1, graph2)
                     eq_mat[i, j] = r
                     eq_mat[j, i] = r
