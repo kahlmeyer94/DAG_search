@@ -23,7 +23,7 @@ requirements = [
 setup(
     name='DAG_search',
     version=1.0,
-    description = "An open source python library symbolic regression based on searching the space of DAGs.",
+    description = "An open source python library for symbolic regression based on searching the space of DAGs.",
     long_description = readme,
     license='MIT',
     author="Paul Kahlmeyer",
