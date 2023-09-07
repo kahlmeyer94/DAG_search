@@ -1,0 +1,131 @@
+pow(Abs(a0),(a1 + x))
+x*Abs(a0)
+pow(Abs(a0),(2*x))
+pow(x,x)
+pow(x,(a0*x))
+x + pow(x,x)
+a0/x + 1
+a0 - pow(x,x)
+x*(a0 - x)
+-x**2 + x
+a0 + 2*x
+pow(Abs(a0),(x**2))
+2/x
+1/(-x + 1/x)
+a0/(a1 - x)
+x**3
+x - pow(Abs(a0),x)
+x/pow(Abs(a0),x)
+a0 + 1/x
+pow(Abs(a0),(a1 - x))
+a0*x
+x + Abs(a0)
+2
+(a0 - x)/x
+pow(x,Abs(a0))
+1/x
+a0 - pow(Abs(a1),x)
+a1*(a0 + x)
+pow(x,a0)
+1/2
+a1 + pow(x,a0)
+pow(Abs(a0),x)/x
+a0/pow(Abs(a1),x)
+x - pow(x,a0)
+a0
+pow(x,(x**2))
+pow((x*Abs(a0)),a1)
+pow(x,(-1/x))
+pow((Abs(a0)/x),a1)
+a0*x - x
+pow(Abs(a0),(-1/x))
+x - 1
+pow(x,a0)/x
+pow(Abs(a0 + x),x)
+pow(Abs(a0),(pow(Abs(a1),x)))
+a0/pow(x,x)
+1/(a0 - 1/x)
+-x + pow(Abs(a0),x)
+pow(Abs(a0),(pow(x,a1)))
+pow(Abs(a0 - x),x)
+x**2 + x
+pow(x,(2*x))
+a1*pow(x,a0)
+0
+a0 - pow(x,a1)
+a0 - x
+x**2 - x
+a0/x - x
+pow(x,(pow(Abs(a0),x)))
+pow(x,(a0/x))
+pow(x,(pow(x,a0)))
+x + pow(Abs(a0),x)
+pow(Abs(a0),(a1*x))
+1 - a0
+1
+a0 + x
+a0 - 1/x
+1 - x
+a0/(a1 + x)
+1/(a0 + x)
+pow((x*Abs(1/a0)),a1)
+pow(x,x)/x
+x + pow(x,a0)
+a1 + pow(Abs(a0),x)
+a0*pow(x,x)
+x*pow(Abs(a0),x)
+a0 - x**2
+pow(x,(pow(x,x)))
+x**(-2)
+x*(a0 + x)
+-x
+pow(0,a0)
+a1*pow(Abs(a0),x)
+Abs(a0)
+a0/x + a1
+2*x**2
+a0*x**2
+pow(x,(a0 - x))
+a0 - 2*x
+1/(x + 1/x)
+a0 + a1*x
+pow(Abs(a0),(a1/x))
+x - Abs(a0)
+pow(Abs(a0),x)
+1/(a0 + 1/x)
+2*x
+x**2
+pow((2*x),a0)
+a0/x**2
+x
+a0/x
+a0 + x**2
+-x + Abs(a0)
+x - pow(x,x)
+zoo
+pow((Abs(a0)/x),x)
+pow(x,(a0 + x))
+Abs(a0)/x
+a0 - 1
+pow(Abs(a0),(pow(x,x)))
+a0 + pow(x,x)
+a1*(a0 - x)
+-x + pow(x,a0)
+x/(a0 - x)
+pow(Abs(a0 + x),a1)
+pow((2*x),x)
+pow((x*Abs(1/a0)),x)
+a0*x + x
+x*pow(x,x)
+x + 1
+-x + pow(x,x)
+1/(a0 - x)
+x/(a0 + x)
+1/(x - 1/x)
+pow(Abs(a0 - x),a1)
+3*x
+pow((x*Abs(a0)),x)
+<class 'sympy.core.numbers.NaN'>
+a0/x + x
+x/pow(x,x)
+x*pow(x,a0)

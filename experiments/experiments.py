@@ -4,12 +4,15 @@ from scipy.stats import pearsonr
 from tqdm import tqdm
 from sklearn.metrics import r2_score
 import os
-import regressors
+
+
 from sklearn.model_selection import train_test_split
 from timeit import default_timer as timer
 
-from DAG_search import utils
-from DAG_search import dag_search
+from ..DAG_search import utils
+from ..DAG_search import dag_search
+import regressors
+
 
 import networkx as nx
 
@@ -223,7 +226,7 @@ def proximity_experiment(random_state = None):
         pickle.dump(dist_dict, handle)
     np.save(save_path_corr, corr_matrix)
 
-def solutions_experiment(topk : int = 10, k : int = 1, n_graphs : int = 10000, random_state : int = None):
+def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, n_graphs : int = 100000, random_state : int = None):
     '''
     Experiment to evaluate the symbolic similarity of top performers.
 
@@ -249,82 +252,78 @@ def solutions_experiment(topk : int = 10, k : int = 1, n_graphs : int = 10000, r
         task_dict = pickle.load(handle)
         
     task_list = []
+    task_names = []
     for problem_name in task_dict:
         X = task_dict[problem_name]['X']
         y_all = task_dict[problem_name]['y']
         for i in range(y_all.shape[1]):
             task_list.append((X, y_all[:, i]))
+            task_names.append(f'{problem_name}_{i}')
             
     m = task_list[0][0].shape[1]
     for X, y in task_list:
         assert X.shape[1] == m
     print(f'{len(task_list)} tasks loaded')
+
     res = {}
-    for n_calc_nodes in np.arange(1, 10, 1):
-        print('#################')
-        print(f'# calc nodes: {n_calc_nodes}')
-        print('#################')
-        print('sampling population')
-        graphs = []
-        for _ in tqdm(range(n_graphs)):
-            graph = dag_search.sample_graph(m, 1, k, n_calc_nodes)
-            graphs.append(graph)
+    print('sampling population')
+    graphs = []
+    for _ in tqdm(range(n_graphs)):
+        graph = dag_search.sample_graph(m, 1, k, n_calc_nodes)
+        graphs.append(graph)
         
         
-        ratios = []
-        rmses = []
-        for problem_idx, (X, y) in enumerate(task_list):
-            print(f'\nProblem Nr. {problem_idx + 1}\n')
-            
-            loss_fkt = dag_search.MSE_loss_fkt(y)
+    for problem_idx, (X, y) in enumerate(task_list):
+        problem_name = task_names[problem_idx]
+        print(f'\nProblem {problem_name}\n')  
+        loss_fkt = dag_search.MSE_loss_fkt(y)
 
-            # 2. sample + optimize population of graphs
-            print('optimizing population')
-            losses = []
-            consts = []
-            for graph in tqdm(graphs):
-                c, loss = dag_search.evaluate_cgraph(graph, X, loss_fkt, opt_mode = 'grid_zoom')
-                losses.append(loss)
-                consts.append(c)
+        # 2. optimize population of graphs
+        print('optimizing population')
+        losses = []
+        consts = []
+        for graph in tqdm(graphs):
+            c, loss = dag_search.evaluate_cgraph(graph, X, loss_fkt, opt_mode = 'grid_zoom')
+            losses.append(loss)
+            consts.append(c)
                 
-            # 3. get top performers
-            sort_idx = np.argsort(np.array(losses))[:10]
-            top_graphs = [graphs[i] for i in sort_idx]
-            top_losses = [losses[i] for i in sort_idx]
-            top_consts = [consts[i] for i in sort_idx]
+        # 3. get top performers
+        sort_idx = np.argsort(np.array(losses))[:topk]
+        top_graphs = [graphs[i] for i in sort_idx]
+        top_losses = [losses[i] for i in sort_idx]
+        top_consts = [consts[i] for i in sort_idx]
 
-            # build similarity matrix
-            print('Building similarity matrix')
-            eq_mat = np.zeros((len(top_graphs), len(top_graphs)))
-            for i, graph1 in tqdm(enumerate(top_graphs), total = len(top_graphs)):
-                for j, graph2 in enumerate(top_graphs):
-                    if i <= j:
-                        expr1 = graph1.evaluate_symbolic(c = top_consts[i])[0]
-                        expr2 = graph2.evaluate_symbolic(c = top_consts[j])[0]
-                        r = utils.symb_eq(expr1, expr2)
-                        #r = utils.edit_distance(graph1, graph2)
-                        eq_mat[i, j] = r
-                        eq_mat[j, i] = r
+        # build similarity matrix
+        print('Building similarity matrix')
+        eq_mat = np.zeros((len(top_graphs), len(top_graphs)))
+        for i, graph1 in tqdm(enumerate(top_graphs), total = len(top_graphs)):
+            for j, graph2 in enumerate(top_graphs):
+                if i <= j:
+                    expr1 = graph1.evaluate_symbolic(c = top_consts[i])[0]
+                    expr2 = graph2.evaluate_symbolic(c = top_consts[j])[0]
+                    r = utils.symb_eq(expr1, expr2)
+                    #r = utils.edit_distance(graph1, graph2)
+                    eq_mat[i, j] = r
+                    eq_mat[j, i] = r
 
-            A = eq_mat.astype(int)
+        A = eq_mat.astype(int)
             
-            n_comps = get_components(A)
-            ratios.append(n_comps/topk)
-            print(f'Detected solutions: {n_comps}')
+        n_groups = get_components(A)
+        print(f'Detected groups: {n_groups}/{topk}')
             
-            # Estimate RMSES
-            top_rmses = []
-            for graph, c in zip(top_graphs, top_consts):
-                pred = graph.evaluate(X, c = c)
-                rmse = np.sqrt(np.mean((pred - y)**2))
-                top_rmses.append(rmse)
-            rmses.append((np.min(top_rmses), np.max(top_rmses), np.mean(top_rmses)))
-            print(f'RMSE stats: {rmses[-1]}')
-        res[n_calc_nodes] = {
-            'group-ratio' : ratios,
-            'min-RMSE' : [x[0] for x in rmses],
-            'max-RMSE' : [x[1] for x in rmses],
-            'avg-RMSE' : [x[2] for x in rmses],
+        # Estimate RMSES
+        top_rmses = []
+        for graph, c in zip(top_graphs, top_consts):
+            pred = graph.evaluate(X, c = c)
+            rmse = np.sqrt(np.mean((pred - y)**2))
+            top_rmses.append(rmse)
+
+        res[problem_name] = {
+            'topk' : topk,
+            'groups' : n_groups,
+            'min-RMSE' : np.min(top_rmses),
+            'max-RMSE' : np.max(top_rmses),
+            'avg-RMSE' : np.mean(top_rmses),
         }
         
         with open(save_path, 'wb') as handle:

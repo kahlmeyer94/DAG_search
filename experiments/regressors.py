@@ -1,6 +1,7 @@
 import sympy
 import warnings
 import numpy as np
+import os
 from tqdm import tqdm
 import itertools
 
@@ -12,7 +13,7 @@ import torch.optim as optim
 import torch.nn as nn
 
 '''
-Black Box Regressors
+Classical Regressors
 '''
 class Net(nn.Module):
 
@@ -185,6 +186,200 @@ class LinReg():
 '''
 Symbolic Regressors
 '''
+def is_float(string):
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+
+class ESR():
+    '''
+    Regressor based on ESR
+    '''
+    def __init__(self, path_to_eqs : str = '', eq_dict : dict = None, max_complexity : int = 6, verbose:int = 0, random_state:int = 0, loss_thresh : float = 1e-6, **params):
+        
+        self.random_state = random_state
+        self.max_complexity = max_complexity
+        self.verbose = verbose
+        self.loss_thresh = loss_thresh
+
+        # Load Equations
+        if eq_dict is None:
+            self.eq_dict = {}
+        else:
+            self.eq_dict = eq_dict
+        if len(self.eq_dict) == 0:
+            exists = True
+            compl = 1
+            while exists and compl <= self.max_complexity:
+                load_path = os.path.join(path_to_eqs, f'compl_{compl}', f'unique_equations_{compl}.txt')
+                if os.path.exists(load_path):
+                    with open(load_path, 'r') as inf:
+                        lines = inf.read().splitlines()
+                    self.eq_dict[compl] = lines
+                    compl += 1
+                else:
+                    exists = False
+
+        self.fn_eval = None
+        self.expr_sympy = None
+
+        self.X = None
+        self.y = None
+        
+    def fit(self, X, y):
+        import esr.generation.generator as generator
+        from esr.fitting.fit_single import single_function
+        from esr.fitting.likelihood import MSE
+
+        assert len(y.shape) == 1
+        assert X.shape[1] == 1
+        np.random.seed(self.random_state)
+
+        self.X = X
+        self.y = y
+       
+        # core math as specified here: https://zenodo.org/record/7339113
+        basis_functions = [["x", "a"], ["inv", "abs"], ["+", "*", "-", "/", "pow"]]
+            
+        all_exprs = [] # sympy expressions
+        all_fns = [] # executable functions
+            
+        # Make some mock data and define likelihood
+        x = X[:, 0]
+        yerr = np.zeros(x.shape)
+        np.savetxt('data.txt', np.array([x, y, yerr]).T)
+        likelihood = MSE('data.txt', '', data_dir=os.getcwd())
+            
+        # Make string to sympy mapping
+        maxvar = 20
+        x = sympy.symbols('x', real=True)
+        a = sympy.symbols([f'a{i}' for i in range(maxvar)], real=True)
+        d1 = {'x':x}
+        d2 = {f'a{i}':a[i] for i in range(maxvar)}
+        locs = {**d1, **d2}
+            
+        for complexity in self.eq_dict:
+            if self.verbose > 0:
+                print(f'Complexity {complexity}')
+            all_models = self.eq_dict[complexity]
+
+            # Empty arrays to store results
+            best_expr = None
+            best_loss = np.inf
+            best_params = None
+
+            if self.verbose > 1:
+                pbar = tqdm(enumerate(all_models), total = len(all_models))
+            else:
+                pbar = enumerate(all_models)
+
+            for i, fun in pbar:
+                try:
+                    # Change string to list
+                    expr, nodes, _ = generator.string_to_node(fun, basis_functions, locs=locs, evalf=True)
+                    labels = nodes.to_list(basis_functions)
+
+                    # labels = pre order tokens
+                    new_labels = [None] * len(labels)
+                    for j, lab in enumerate(labels):
+                        if lab == 'Mul':
+                            new_labels[j] = '*'
+                            labels[j] = '*'
+                        elif lab == 'Add':
+                            new_labels[j] = '+'
+                            labels[j] = '+'
+                        elif lab == 'Div':
+                            new_labels[j] = '/'
+                            labels[j] = '/'
+                        else:
+                            new_labels[j] = lab.lower()
+                            labels[j] = lab.lower()
+                    param_idx = [j for j, lab in enumerate(new_labels) if is_float(lab)]
+                    assert len(param_idx) <= maxvar, fun
+                    for k, j in enumerate(param_idx):
+                        new_labels[j] = f'a{k}'
+                    # new labels = cleaned version
+
+                    s = generator.labels_to_shape(new_labels, basis_functions)
+
+
+                    success, _, tree = generator.check_tree(s)
+                    parents = [None] + [labels[p.parent] for p in tree[1:]]
+
+                    # Replace floats with symbols (except exponents)
+                    param_idx = [j for j, lab in enumerate(labels) if is_float(lab) and not (not parents[j] is None and parents[j].lower() =='pow')]
+                    for k, j in enumerate(param_idx):
+                        labels[j] = f'a{k}'
+                    fstr = generator.node_to_string(0, tree, labels)
+
+
+                    loss, _, params = single_function(labels, basis_functions, likelihood, verbose=False, return_params = True)
+                    # subsitute params into expression
+
+                    if loss < best_loss:
+                        best_loss = loss
+                        best_params = params
+                        best_expr = fstr
+
+                except ValueError:
+                    pass
+
+            # insert params into expression
+            expr = best_expr
+            for i in range(len(best_params)):
+                if f'a{i}' in expr:
+                    v_i = best_params[i]
+                    if v_i >= 0:
+                        expr = expr.replace(f'abs(a{i})', str(v_i))
+                    else:
+                        expr = expr.replace(f'abs(a{i})', str(-v_i))
+                    expr = expr.replace(f'a{i}', str(v_i))
+            best_expr = sympy.sympify(expr)
+
+            # replace x with x_0
+            x_symb = sympy.Symbol('x_0', real = True)
+            best_expr = best_expr.subs(sympy.Symbol('x'), x_symb)   
+
+            # create eval function
+            np_func = sympy.lambdify(x_symb, best_expr, modules=["numpy"])
+
+            all_exprs.append(best_expr)
+            all_fns.append(np_func)
+
+            if self.verbose > 0:
+                print(f'Best expression: {str(best_expr)}\tLoss: {best_loss}')
+
+            if best_loss <= self.loss_thresh:
+                break
+
+        if os.path.exists('data.txt'):
+            os.remove('data.txt')
+
+        # save best model
+        mses = []
+        for eval_fn in all_fns:
+            
+            try:
+                pred = eval_fn(X[:, 0])
+                mses.append(np.mean((pred - y)**2))
+            except np.linalg.LinAlgError:
+                mses.append(np.inf)
+        best_idx = np.argmin(mses)
+        self.fn_eval = all_fns[best_idx]
+        self.expr_sympy = all_exprs[best_idx]
+    
+
+    def predict(self, X):
+        assert self.X is not None
+        assert X.shape[1] == 1
+        pred = self.fn_eval(X[:, 0])
+        return pred
+
+    def model(self):
+        assert self.X is not None
+        return self.expr_sympy
 
 class Operon():
     '''
