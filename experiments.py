@@ -9,8 +9,8 @@ import os
 from sklearn.model_selection import train_test_split
 from timeit import default_timer as timer
 
-from ..DAG_search import utils
-from ..DAG_search import dag_search
+from DAG_search import utils
+from DAG_search import dag_search
 import regressors
 
 
