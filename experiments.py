@@ -335,7 +335,7 @@ if __name__ == '__main__':
 
     # local minima experiment
     if True:
-        solutions_experiment(n_graphs=10000, random_state=0)
+        solutions_experiment(k = 2, n_graphs=10000, random_state=0)
 
     # recovery experiment
     if False:
