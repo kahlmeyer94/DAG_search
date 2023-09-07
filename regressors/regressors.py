@@ -323,6 +323,9 @@ class ESR():
                         best_params = params
                         best_expr = fstr
 
+                    if best_loss <= self.loss_thresh:
+                        break
+
                 except ValueError:
                     pass
 
