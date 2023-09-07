@@ -223,7 +223,7 @@ def proximity_experiment(random_state = None):
         pickle.dump(dist_dict, handle)
     np.save(save_path_corr, corr_matrix)
 
-def solutions_experiment(topk : int = 10, k : int = 1, n_graphs : int = 10000, random_state : int = None):
+def solutions_experiment(topk : int = 100, k : int = 1, n_graphs : int = 10000, random_state : int = None):
     '''
     Experiment to evaluate the symbolic similarity of top performers.
 
@@ -335,7 +335,7 @@ if __name__ == '__main__':
 
     # local minima experiment
     if True:
-        solutions_experiment(k = 2, n_graphs=10000, random_state=0)
+        solutions_experiment(random_state=0)
 
     # recovery experiment
     if False:
