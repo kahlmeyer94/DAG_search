@@ -363,7 +363,7 @@ if __name__ == '__main__':
         rand_state = 0
         ds_name = 'Univ'
         regs = {
-            'esr' : (regressors.ESR(path_to_eqs = 'regressors/core_maths', max_complexity = 10, verbose = 2, random_state = rand_state), True) 
+            'esr' : (regressors.ESR(path_to_eqs = 'regressors/core_maths', max_complexity = 9, verbose = 2, random_state = rand_state), True) 
         }
         for regressor_name in regs:
             if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
