@@ -249,6 +249,8 @@ class ESR():
         np.savetxt('data.txt', np.array([x, y, yerr]).T)
         likelihood = MSE('data.txt', '', data_dir=os.getcwd())
             
+        if os.path.exists('data.txt'):
+            os.remove('data.txt')
         # Make string to sympy mapping
         maxvar = 20
         x = sympy.symbols('x', real=True)
