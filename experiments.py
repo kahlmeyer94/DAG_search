@@ -335,8 +335,13 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
 
 if __name__ == '__main__':
 
-    # local minima experiment
+    # DAG-search vs. ESR
     if True:
+        # TODO
+        pass
+
+    # local minima experiment
+    if False:
         solutions_experiment(n_graphs=10000, random_state=0)
 
     # recovery experiment
