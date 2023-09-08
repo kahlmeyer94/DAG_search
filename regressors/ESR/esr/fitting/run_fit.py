@@ -1,5 +1,5 @@
 import sys
-from mpi4py import MPI
+#from mpi4py import MPI
 
 import esr.fitting.test_all as test_all
 import esr.fitting.test_all_Fisher as test_all_Fisher
@@ -11,9 +11,9 @@ from esr.fitting.likelihood import CCLikelihood, PanthLikelihood, MockLikelihood
 
 try_integration=False
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 def print_text(text):
     if rank != 0:

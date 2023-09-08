@@ -2,7 +2,7 @@ import numpy as np
 import math
 from scipy.optimize import minimize
 import sympy
-from mpi4py import MPI
+#from mpi4py import MPI
 import warnings
 import os
 import sys
@@ -18,9 +18,9 @@ warnings.filterwarnings("ignore")
 
 use_relative_dx = True              # CHANGE
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
     
 def load_loglike(comp, likelihood, data_start, data_end, split=True):
     """Load results of optimisation completed by test_all.py

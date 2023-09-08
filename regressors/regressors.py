@@ -229,9 +229,9 @@ class ESR():
         self.y = None
         
     def fit(self, X, y):
-        import esr.generation.generator as generator
-        from esr.fitting.fit_single import single_function
-        from esr.fitting.likelihood import MSE
+        import esr.generation.generator as generator # clear
+        from esr.fitting.fit_single import single_function # 
+        from esr.fitting.likelihood import MSE # 
 
         assert len(y.shape) == 1
         assert X.shape[1] == 1
@@ -331,6 +331,7 @@ class ESR():
 
             # insert params into expression
             expr = best_expr
+            expr = expr.replace('inv', '1/')
             for i in range(len(best_params)):
                 if f'a{i}' in expr:
                     v_i = best_params[i]

@@ -9,7 +9,6 @@ pympler
 psutil
 prettytable
 numdifftools
-mpi4py
 astropy
 treelib
 networkx

@@ -1,7 +1,7 @@
 import sys
 import matplotlib.pyplot as plt
 import csv
-from mpi4py import MPI
+#from mpi4py import MPI
 import warnings
 import numpy as np
 import sympy
@@ -15,9 +15,9 @@ import esr.generation.simplifier as simplifier
 
 warnings.filterwarnings("ignore")
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 def main(comp, likelihood, tmax=5, try_integration=False, xscale='linear', yscale='linear'):
     """Plot best 50 functions at given complexity against data and save plot to file

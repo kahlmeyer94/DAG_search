@@ -8,7 +8,7 @@ import sys
 import os
 import warnings
 
-from esr.fitting.sympy_symbols import *
+from esr.fitting.sympy_symbols import * # clear
 
 from esr.generation.simplifier import time_limit
 import esr.generation.simplifier

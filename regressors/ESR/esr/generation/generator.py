@@ -1,7 +1,7 @@
 import numpy as np
 import itertools
 import sys
-from mpi4py import MPI
+#from mpi4py import MPI
 import sympy
 from sympy.core.sympify import kernS
 import gc
@@ -12,9 +12,9 @@ import esr.generation.simplifier as simplifier
 import esr.generation.utils as utils
 from esr.fitting.sympy_symbols import *
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 def is_float(string):
     """Determine whether a string is a float or not

@@ -20,7 +20,7 @@ setup(
 		'psutil',
 		'prettytable',
 		'numdifftools',
-		'mpi4py',
+		#'mpi4py',
 		'astropy',
                 'treelib',
                 'networkx'

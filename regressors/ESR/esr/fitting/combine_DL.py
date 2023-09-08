@@ -1,15 +1,15 @@
 import math
 import numpy as np
-from mpi4py import MPI
+#from mpi4py import MPI
 import os, sys
 from prettytable import PrettyTable
 import csv
 
 import esr.fitting.test_all as test_all
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 def main(comp, likelihood, print_frequency=1000):
     """Combine the description lengths of all functions of a given complexity, sort by this and save to file.

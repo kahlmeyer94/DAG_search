@@ -3,7 +3,7 @@ import sympy
 import signal
 import sys
 import itertools
-from mpi4py import MPI
+#from mpi4py import MPI
 from contextlib import contextmanager
 import csv
 import ast
@@ -17,9 +17,9 @@ import esr.generation.utils as utils
 from esr.generation.custom_printer import ESRPrinter
 from esr.fitting.sympy_symbols import *
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 class TimeoutException(Exception): pass
 
@@ -55,20 +55,14 @@ def get_max_param(all_fun, verbose=True):
     """
 
     max_param = -1
-
-    if rank == 0:
-        with_ai = all_fun.copy()
-        while len(with_ai) > 0:
-            max_param += 1
-            with_ai = [f for f in with_ai if 'a%i'%max_param in f]
-        if max_param < 0:
-            max_param = 0
-        if verbose:
-            print('\nMax number of parameters:', max_param)
-    else:
-        max_param = None
-    max_param = comm.bcast(max_param, root=0)
-    sys.stdout.flush()
+    with_ai = all_fun.copy()
+    while len(with_ai) > 0:
+        max_param += 1
+        with_ai = [f for f in with_ai if 'a%i'%max_param in f]
+    if max_param < 0:
+        max_param = 0
+    if verbose:
+        print('\nMax number of parameters:', max_param)
     
     return max_param
     
@@ -175,13 +169,6 @@ def initial_sympify(all_fun, max_param, verbose=True, parallel=True, track_memor
         :sym_fun (OrderedDict): dictionary of sympy objects which can be accessed by their string representations. If save_sympy is False, then sym_fun is None.
     """
 
-    if rank == 0 and verbose:
-        if track_memory:
-            utils.using_mem("start initial sympify")
-            utils.locals_size(locals())
-        print('\nSympy simplify')
-    sys.stdout.flush()
-
     x, x0, y= sympy.symbols('x x0 y', positive=True)
     if max_param > 0:
         param_list = ['a%i'%i for i in range(max_param)]
@@ -191,21 +178,14 @@ def initial_sympify(all_fun, max_param, verbose=True, parallel=True, track_memor
     else:
         param_list = []
     
-    sympy.init_printing(use_unicode=True)
+    #sympy.init_printing(use_unicode=True)
     locs = sympy_locs
                 
     if max_param > 0:
         for i in range(len(all_a)):
             locs["a%i"%i] = all_a[i]
     
-    if parallel:
-        i = np.atleast_1d(utils.split_idx(len(all_fun), rank, size))
-        if len(i) == 0:
-            str_fun = []
-        else:
-            str_fun = all_fun[i[0]:i[-1]+1]
-    else:
-        str_fun = all_fun
+    str_fun = all_fun
     
     if save_sympy:
         sym_fun = OrderedDict()
@@ -223,35 +203,6 @@ def initial_sympify(all_fun, max_param, verbose=True, parallel=True, track_memor
         if save_sympy:
             if not str_fun[i] in sym_fun:
                 sym_fun[str_fun[i]] = s
-
-    # We have to gather these, although won't do this again
-    if parallel:
-
-        # First find which ranks contain which indices
-        start_idx = len(str_fun)
-        start_idx = comm.gather(start_idx, root=0)
-        if rank == 0:
-            start_idx = np.array([0] + start_idx, dtype=int)
-            start_idx = np.squeeze(np.cumsum(start_idx))
-        start_idx = comm.bcast(start_idx, root=0)
-
-        # Now send each rank to everyone else
-        all_fun = [None] * start_idx[-1]
-        for r in range(size):
-            all_fun[start_idx[r]:start_idx[r+1]] = comm.bcast(str_fun, root=r) 
-        str_fun = all_fun
-
-        if save_sympy:
-            all_sym = OrderedDict()
-            for r in range(size):
-                sym_keys = comm.bcast(list(sym_fun.keys()), root=r)
-                sym_vals = comm.bcast(list(sym_fun.values()), root=r)
-                for i in range(len(sym_keys)):
-                    key = sym_keys[i]
-                    if not key in all_sym:
-                        all_sym[key] = sym_vals[i]
-        
-            sym_fun = all_sym
 
     return str_fun, sym_fun
     

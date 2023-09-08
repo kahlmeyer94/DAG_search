@@ -1,11 +1,11 @@
 import esr.generation.duplicate_checker as duplicate_checker 
 import time
-from mpi4py import MPI
+#from mpi4py import MPI
 from memory_profiler import memory_usage
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 runname = 'core_maths'
 compl = 7

@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import sympy
-from mpi4py import MPI
+#from mpi4py import MPI
 import warnings
 import os
 import sys
@@ -15,9 +15,9 @@ import esr.generation.simplifier as simplifier
 
 warnings.filterwarnings("ignore")
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 def main(comp, likelihood, tmax=5, print_frequency=1000, try_integration=False):
     """Apply results of fitting the unique functions to all functions and save to file

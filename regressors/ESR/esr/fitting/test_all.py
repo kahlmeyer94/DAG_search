@@ -3,7 +3,7 @@ import sympy
 import warnings
 import os
 import sys
-from mpi4py import MPI
+#from mpi4py import MPI
 from scipy.optimize import minimize
 import itertools
 
@@ -12,9 +12,9 @@ import esr.generation.simplifier as simplifier
 
 warnings.filterwarnings("ignore")
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
 
 def chi2_fcn(x, likelihood, eq_numpy, integrated, signs):
     """Compute chi2 for a function
