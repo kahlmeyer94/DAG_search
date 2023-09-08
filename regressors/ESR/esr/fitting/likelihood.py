@@ -39,8 +39,8 @@ class Likelihood:
             self.like_dir = esr_dir + "/fitting/"
         else:
             self.like_dir = data_dir + "/fitting/"
-        if not os.path.isdir(self.like_dir):
-            os.mkdir(self.like_dir)
+        #if not os.path.isdir(self.like_dir):
+        #    os.mkdir(self.like_dir)
         self.fnprior_prefix = "aifeyn_"
         self.combineDL_prefix = "combine_DL_"
         self.final_prefix = "final_"
