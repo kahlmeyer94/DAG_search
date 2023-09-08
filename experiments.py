@@ -335,32 +335,10 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
 
 if __name__ == '__main__':
 
-    # DAG-search vs. ESR
-    if True:
-        rand_state = 0
-        ds_name = 'Univ'
-        regs = {
-            #'linreg' : (regressors.LinReg(), True),
-            #'polyreg2' : (regressors.PolyReg(degree= 2), True),
-            #'polyreg3' : (regressors.PolyReg(degree= 3), True),
-            #'MLP' : (regressors.MLP(random_state = rand_state), False),
-            #'operon' : (regressors.Operon(random_state = rand_state), True),
-            #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
-            #'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
-            'esr' : (regressors.ESR(path_to_eqs = 'regressors/core_maths', max_complexity = 10, verbose = 2, random_state = rand_state), True) 
-            #'dsr' : (regressors.DSR(), True),
-        }
-        for regressor_name in regs:
-            regressor, is_symb = regs[regressor_name]
-            recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
-
-
-    # local minima experiment
-    if False:
-        solutions_experiment(n_graphs=10000, random_state=0)
-
+    
     # recovery experiment
-    if False:
+    if True:
+        overwrite = False
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         regs = {
@@ -375,8 +353,28 @@ if __name__ == '__main__':
         }
         for ds_name in problems:
             for regressor_name in regs:
+                if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
+                    regressor, is_symb = regs[regressor_name]
+                    recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
+
+    # ESR recovery experiment
+    if True:
+        overwrite = False
+        rand_state = 0
+        ds_name = 'Univ'
+        regs = {
+            'esr' : (regressors.ESR(path_to_eqs = 'regressors/core_maths', max_complexity = 10, verbose = 2, random_state = rand_state), True) 
+            #'dsr' : (regressors.DSR(), True),
+        }
+        for regressor_name in regs:
+            if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
                 regressor, is_symb = regs[regressor_name]
                 recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
+
+
+    # local minima experiment
+    if False:
+        solutions_experiment(n_graphs=10000, random_state=0)
 
     # proximity experiment
     if False:
