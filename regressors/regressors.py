@@ -472,6 +472,7 @@ class DSR():
     def __init__(self, verbose:int = 0, random_state:int = 0, **params):
         from dso import DeepSymbolicRegressor
 
+        # Hyperparams for DSO
         function_set = ["add", "sub", "mul", "div", "sin", "cos", "exp", "log", "sqrt", "poly"]
         params = {
             "experiment" : {
@@ -480,6 +481,8 @@ class DSR():
             "task": {
                 "task_type" : "regression",
                 "function_set" : function_set,
+                "metric" : "inv_nrmse",
+                "threshold" : 0.999,
                 "poly_optimizer_params" : {
                     "degree": 2,
                     "regressor": "dso_least_squares",
@@ -487,12 +490,17 @@ class DSR():
                 }
 
             },
-            "policy" : {
-                "max_length" : 25
+            "training": {
+                "n_samples": 50000,
+                "batch_size": 1000,
+                "verbose" : verbose,
+                "n_cores_batch" : 1,
+                "early_stopping": True,
             },
+
         }
 
-        self.model = DeepSymbolicRegressor(params)
+        self.regr = DeepSymbolicRegressor(params)
         
         self.X = None
         self.y = None
@@ -507,16 +515,16 @@ class DSR():
             self.X = X.copy()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            self.model.fit(self.X, self.y)
+            self.regr = self.regr.fit(self.X, self.y)
 
     def predict(self, X):
         assert self.X is not None
-        pred = self.model.predict(X)
+        pred = self.regr.predict(X)
         return pred.flatten()
 
     def model(self):
         assert self.X is not None
-        expr = self.model.program_.sympy_expr[0]
+        expr = self.regr.program_.sympy_expr
         x_symbs = expr.free_symbols
         symb_dict = {}
         for x in x_symbs:
@@ -526,3 +534,4 @@ class DSR():
         for i in symb_dict:
             expr = expr.subs(symb_dict[i], sympy.symbols(f'x_{i-1}', real = True))
         return expr
+
