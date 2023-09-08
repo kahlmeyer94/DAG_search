@@ -1,0 +1,135 @@
+exp(exp(sqrt(x)))
+1/(a0 + x)
+sqrt(x)*sqrt(Abs(1/a0))
+-x**2 + x
+sqrt(Abs(a0 - x))
+x**(-4)
+pow(Abs(a0),(x/2))
+exp(x**4)
+exp(pow(x,x))
+x + 1/x
+a0/sqrt(Abs(a1))
+pow(x,(3/2))
+pow(x,(sqrt(x)))
+pow(x,(x**2))
+pow(Abs(a0),(1/8))
+a0 - 1/x
+exp(a0/x)
+x + Abs(a0)
+0
+x*exp(-x)
+x - exp(x)
+exp(2*Abs(a0))
+a0
+exp(-1/x)
+sqrt(2)*sqrt(x)
+exp(1/sqrt(x))
+exp(2*x**2)
+x - 1/x
+Abs(a0)
+exp(pow(x,(1/4)))
+Abs(a0)/sqrt(x)
+pow(x,(-x))
+x**(-2)
+a0 + x
+exp(-sqrt(x))
+sqrt(x) + x
+x**2 - x
+pow(Abs(a0),(1/x))
+x**4
+sqrt(x)
+pow(Abs(a0),(x**2))
+a0 - x
+exp(exp(x)/2)
+exp(2*x)
+E
+(a0 - x)**2
+exp(2*sqrt(x))
+exp(exp(x**2))
+sqrt(x) - x
+a0/x
+a0 + 1/x
+exp(-x)*Abs(a0)
+exp(2/x)
+exp(x)/x
+-x + exp(x)
+x + exp(x)
+exp(1/sqrt(Abs(a0)))
+pow(x,(x/2))
+exp(x**(-2))
+exp(-Abs(a0))
+1/(a0 - x)
+pow(x,(-1/4))
+a0 - exp(x)
+exp(-x**2)
+a0 + x**2
+exp(sqrt(x)/2)
+-sqrt(x) + x
+pow(Abs(a0),(sqrt(x)))
+exp(-x/2)
+a0 + sqrt(x)
+exp(-2*x)
+a0*sqrt(x)
+a0/sqrt(x)
+x**3
+x**8
+zoo
+a0 - x**2
+exp(Abs(a0))
+x - Abs(a0)
+x**2*Abs(a0)
+4*x**2
+exp(a0*x)
+exp(Abs(a0)/2)
+exp(x**2/2)
+exp(pow(Abs(a0),(1/4)))
+exp(pow(Abs(a0),x))
+exp(exp(1/x))
+a0*exp(x)
+pow(x,exp(x))
+exp(x/4)
+pow(x,(1/x))
+x*exp(x)
+exp(exp(x/2))
+exp(exp(Abs(a0)))
+exp(x**2)
+exp(x)*Abs(a0)
+exp(1/(2*x))
+pow(Abs(a0),(2*x))
+pow(x,Abs(a0))
+pow(x,a0)
+pow(x,(1/8))
+exp(4*x)
+x**2
+exp(x)
+1/sqrt(x)
+a0*x
+x/sqrt(Abs(a0))
+1/x
+exp(-exp(x))
+x*Abs(a0)
+sqrt(x)*Abs(a0)
+-x + Abs(a0)
+exp(exp(exp(x)))
+pow(Abs(a0),(-1/4))
+pow(Abs(a0),(-x))
+a0*exp(-x)
+1
+Abs(a0)/x
+-x + 1/x
+exp(pow(x,a0))
+Abs(a0)/x**2
+(a0 + x)**2
+x**2 + x
+a0 - sqrt(x)
+a0 + exp(x)
+pow(x,(2*x))
+a0/x**2
+exp(exp(-x))
+pow(Abs(a0),exp(x))
+exp(exp(2*x))
+exp(2*exp(x))
+a0*x**2
+x
+1/Abs(a0)
+1/(2*x)

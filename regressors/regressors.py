@@ -210,18 +210,14 @@ class ESR():
         else:
             self.eq_dict = eq_dict
         if len(self.eq_dict) == 0:
-            exists = True
-            compl = 1
-            while exists and compl <= self.max_complexity:
+            compls = [int(n.split('_')[-1]) for n in os.listdir(path_to_eqs)]
+            compls = [c for c in compls if c <= self.max_complexity]
+            for compl in compls:
                 load_path = os.path.join(path_to_eqs, f'compl_{compl}', f'unique_equations_{compl}.txt')
                 if os.path.exists(load_path):
                     with open(load_path, 'r') as inf:
                         lines = inf.read().splitlines()
                     self.eq_dict[compl] = lines
-                    compl += 1
-                else:
-                    exists = False
-
         self.fn_eval = None
         self.expr_sympy = None
 
@@ -241,7 +237,8 @@ class ESR():
         self.y = y
        
         # core math as specified here: https://zenodo.org/record/7339113
-        basis_functions = [["x", "a"], ["inv", "abs"], ["+", "*", "-", "/", "pow"]]
+        #basis_functions = [["x", "a"], ["inv", "abs"], ["+", "*", "-", "/", "pow"]]
+        basis_functions = [["x", "a"], ["inv", "abs", "exp", "sqrt"], ["+", "*", "-", "/", "pow"]]
             
         all_exprs = [] # sympy expressions
         all_fns = [] # executable functions
@@ -326,7 +323,7 @@ class ESR():
                     if best_loss <= self.loss_thresh:
                         break
 
-                except ValueError:
+                except (ValueError, AssertionError):
                     pass
 
             # insert params into expression
@@ -374,7 +371,6 @@ class ESR():
         self.fn_eval = all_fns[best_idx]
         self.expr_sympy = all_exprs[best_idx]
     
-
     def predict(self, X):
         assert self.X is not None
         assert X.shape[1] == 1
