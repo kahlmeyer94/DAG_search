@@ -257,7 +257,7 @@ class ESR():
         d2 = {f'a{i}':a[i] for i in range(maxvar)}
         locs = {**d1, **d2}
             
-        for complexity in self.eq_dict:
+        for complexity in sorted(list(self.eq_dict.keys())):
             if self.verbose > 0:
                 print(f'Complexity {complexity}')
             all_models = self.eq_dict[complexity]
