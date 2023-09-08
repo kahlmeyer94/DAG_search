@@ -349,7 +349,7 @@ if __name__ == '__main__':
             'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
-            #'dsr' : (regressors.DSR(), True),
+            'dsr' : (regressors.DSR(), True),
         }
         for ds_name in problems:
             for regressor_name in regs:
@@ -364,7 +364,6 @@ if __name__ == '__main__':
         ds_name = 'Univ'
         regs = {
             'esr' : (regressors.ESR(path_to_eqs = 'regressors/core_maths', max_complexity = 10, verbose = 2, random_state = rand_state), True) 
-            #'dsr' : (regressors.DSR(), True),
         }
         for regressor_name in regs:
             if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
