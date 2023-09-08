@@ -12,7 +12,7 @@ required = [
     "cython",
     "numpy",
     "tensorflow",
-    "numba==0.53.1",
+    "numba",
     "sympy",
     "pandas",
     "scikit-learn",

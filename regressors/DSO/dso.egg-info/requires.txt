@@ -2,7 +2,7 @@ pytest
 cython
 numpy
 tensorflow
-numba==0.53.1
+numba
 sympy
 pandas
 scikit-learn
@@ -17,8 +17,8 @@ PyYAML
 prettytable
 
 [all]
-stable-baselines[mpi]==2.10.0
 pybullet
+stable-baselines[mpi]==2.10.0
 gym[box2d]==0.15.4
 
 [control]
