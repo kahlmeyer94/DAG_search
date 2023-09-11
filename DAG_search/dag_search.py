@@ -5,6 +5,7 @@ import numpy as np
 import itertools
 import warnings
 from scipy.optimize import minimize
+from scipy.special import logsumexp
 from tqdm import tqdm
 import pickle
 import multiprocessing
@@ -292,7 +293,7 @@ def build_dag(build_order:list, node_ops:list, m:int, n:int, k:int) -> comp_grap
         node_dict[i] = (list(parents), op)
     return comp_graph.CompGraph(m = m, n = n, k = k, node_dict = node_dict)
 
-def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 10000, verbose:int = 0) -> list:
+def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 10000, verbose:int = 0, fix_size : bool = False) -> list:
     '''
     Creates empty DAG scaffolds (no operations yet).
 
@@ -303,6 +304,7 @@ def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 100
         n_calc_nodes... number of intermediate nodes
         max_orders... maximum number of possible DAG orders to search trough (lower = exhaustive, higher = sampling)
         verbose... 0 - no print, 1 - status message, 2 - progress bar
+        fix_size... if set, will return only build orders with n_calc_nodes intermediate nodes (not less)
 
     @Returns:
         list build orders (can be used by build_dag).
@@ -332,8 +334,20 @@ def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 100
     for i in inter_nodes + outp_nodes:
         sample_space_edges.append(predecs[i])
         sample_space_edges.append(predecs[i] + [-1])
-    #total_its = np.prod([len(s) for s in sample_space_edges]) # potential overflow!
-    if np.sum([np.log(len(s)) for s in sample_space_edges]) > np.log(max_orders):
+    #its_total = np.prod([len(s) for s in sample_space_edges]) # potential overflow!
+    log_its_total = np.sum([np.log(len(s)) for s in sample_space_edges]) 
+
+    if fix_size:
+        if n_calc_nodes > 0:
+            lengths_prev = []
+            for i in range(2*(len(inter_nodes) - 1)):
+                lengths_prev.append(len(sample_space_edges[i]))
+            for i in range(2*(len(outp_nodes))):
+                lengths_prev.append(len(sample_space_edges[i + 2*len(inter_nodes)]) - 1)
+            log_its_prev = np.sum([np.log(l) for l in lengths_prev])
+            log_its_total = logsumexp([log_its_total, log_its_prev], b = [1, -1])
+
+    if log_its_total > np.log(max_orders):
         # just sample random orders
         possible_edges = []
         for _ in range(max_orders):
@@ -365,16 +379,23 @@ def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 100
             for i in range(n):
                 order_ID = order_ID + get_pre_order(order, m + k + i, inp_nodes, inter_nodes, outp_nodes)
             
+            is_new = True
+            if fix_size:
+                if n_calc_nodes > 0:
+                    # how many intermediate nodes occur?
+                    check_set = set(order_ID)
+                    is_new = np.all([i in check_set for i in inter_nodes])
 
-            # rename intermediate nodes after the order in which they appear ( = 1 naming)
-            ren_dict = {}
-            counter = 0
-            for i in order:
-                if (i in inter_nodes) and (i not in ren_dict):
-                    ren_dict[i] = inter_nodes[counter]
-                    counter += 1
-            tmp_ID = tuple([ren_dict[node] if node in ren_dict else node for node in order_ID])
-            is_new = tmp_ID not in valid_set
+            if is_new:
+                # rename intermediate nodes after the order in which they appear ( = 1 naming)
+                ren_dict = {}
+                counter = 0
+                for i in order:
+                    if (i in inter_nodes) and (i not in ren_dict):
+                        ren_dict[i] = inter_nodes[counter]
+                        counter += 1
+                tmp_ID = tuple([ren_dict[node] if node in ren_dict else node for node in order_ID])
+                is_new = tmp_ID not in valid_set
             
         
             
@@ -624,7 +645,7 @@ def is_pickleable(x:object) -> bool:
     except (pickle.PicklingError, AttributeError):
         return False
 
-def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_size:int = np.inf, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
     '''
     Exhaustive search for a DAG.
 
@@ -897,6 +918,160 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 
     return ret
 
+def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+    '''
+    Exhaustive search for a DAG but hierarchical.
+
+    @Params:
+        X... input for DAG, something that is accepted by loss fkt
+        n_outps... number of outputs for DAG
+        loss_fkt... function: X, cgraph, consts -> float
+        k... number of constants
+        n_calc_nodes... how many intermediate nodes at most?
+        n_processes... number of processes for evaluation
+        topk... we return top k found graphs
+        verbose... print modus 0 = no print, 1 = status messages, 2 = progress bars
+        opt_mode... method for optimizing constants, one of {pool, opt, grid, grid_opt}
+        max_orders... will at most evaluate this many chosen orders
+        max_size... will only return at most this many graphs (sorted by loss)
+        stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
+        unique_loss... only take graph into topk if it has a totally new loss
+    @Returns:
+        dictionary with:
+            graphs -> list of computational DAGs
+            consts -> list of constants
+            losses -> list of losses
+
+    '''
+
+    n_processes = max(min(n_processes, multiprocessing.cpu_count()), 1)
+    ctx = multiprocessing.get_context('spawn')
+
+    if n_processes > 1:
+        error_msg = 'Loss function must be serializable with pickle for > 1 processes.\n'
+        error_msg += 'See dag_search.MSE_loss_fkt for an example.\n'
+        error_msg += 'If this worked before, consider reloading your loss funktion.'
+        assert is_pickleable(loss_fkt), error_msg
+
+    m = X.shape[1]
+    n = n_outps
+
+    top_losses = []
+    top_consts = []
+    top_ops = []
+    top_orders = []
+    loss_thresh = np.inf
+
+    for calc_nodes in range(n_calc_nodes):
+        if verbose > 0:
+            print('#########################')
+            print(f'# Calc Nodes: {calc_nodes}')
+            print('#########################')
+
+        # collect computational graphs (no operations on nodes yet)
+        orders = get_build_orders(m, n, k, calc_nodes, max_orders = max_orders, verbose=verbose, fix_size=True)
+
+        if verbose > 0:
+            print(f'Total orders: {len(orders)}')
+            print('Evaluating orders')
+
+        early_stop = False
+        if n_processes == 1:
+            # sequential
+            losses = []
+            if verbose == 2:
+                pbar = tqdm(orders)
+            else:
+                pbar = orders
+            for order in pbar:
+                consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, opt_mode = opt_mode)
+                for c, loss, op in zip(consts, losses, ops):
+                    
+                    if loss <= loss_thresh:
+                        if unique_loss:
+                            valid = loss not in top_losses
+                        else:
+                            valid = True
+
+                        if valid:
+                            if len(top_losses) >= topk:
+                                repl_idx = np.argmax(top_losses)
+                                top_consts[repl_idx] = c
+                                top_losses[repl_idx] = loss
+                                top_ops[repl_idx] = op
+                                top_orders[repl_idx] = order
+                            else:
+                                top_consts.append(c)
+                                top_losses.append(loss)
+                                top_ops.append(op)
+                                top_orders.append(order)
+                            
+                            loss_thresh = np.max(top_losses)
+                            if verbose == 2:
+                                pbar.set_postfix({'best_loss' : np.min(top_losses)})
+                    if loss < stop_thresh:
+                        early_stop = True
+                        break
+                if early_stop:
+                    break
+        else:
+            args = [[order, m, n, k, X, loss_fkt, opt_mode, stop_thresh] for order in orders]
+            if verbose == 2:
+                pbar = tqdm(args, total = len(args))
+            else:
+                pbar = args
+
+            with ctx.Pool(processes=n_processes, initializer=init_process, initargs=(early_stop,)) as pool:
+                pool_results = pool.starmap(evaluate_build_order, pbar)
+
+            for i, (consts, losses, ops) in enumerate(pool_results):
+                for c, loss, op in zip(consts, losses, ops):
+                    if loss <= loss_thresh:
+                        if unique_loss:
+                            valid = loss not in top_losses
+                        else:
+                            valid = True
+
+                        if valid:
+                            if len(top_losses) >= topk:
+                                repl_idx = np.argmax(top_losses)
+                                top_consts[repl_idx] = c
+                                top_losses[repl_idx] = loss
+                                top_ops[repl_idx] = op
+                                top_orders[repl_idx] = orders[i]
+                            else:
+                                top_consts.append(c)
+                                top_losses.append(loss)
+                                top_ops.append(op)
+                                top_orders.append(orders[i])
+                            
+                            loss_thresh = np.max(top_losses)
+                            if verbose == 2:
+                                pbar.set_postfix({'best_loss' : np.min(top_losses)})
+                
+
+        sort_idx = np.argsort(top_losses)
+        top_losses = [top_losses[i] for i in sort_idx]
+        top_consts = [top_consts[i] for i in sort_idx]
+        top_orders = [top_orders[i] for i in sort_idx]
+        top_ops = [top_ops[i] for i in sort_idx]
+        top_graphs = []
+        for order, ops in zip(top_orders, top_ops):
+            cgraph = build_dag(order, ops, m, n, k)
+            top_graphs.append(cgraph.copy())
+
+        if top_losses[0] <= stop_thresh:
+            if verbose > 0:
+                print(f'Stopping because early stop criteria has been matched!')
+            break
+
+    ret = {
+        'graphs' : top_graphs,
+        'consts' : top_consts,
+        'losses' : top_losses}
+
+    return ret
+
 
 ########################
 # Sklearn Interface
@@ -972,7 +1147,8 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'max_orders' : self.max_orders, 
             'stop_thresh' : 1e-6
         }
-        res = exhaustive_search(**params)
+        res = hierarchical_search(**params)
+        #res = exhaustive_search(**params)
         if verbose > 0:
             print(f'Found graph with loss {res["losses"][0]}')
         self.cgraph = res['graphs'][0]
