@@ -962,7 +962,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
     top_orders = []
     loss_thresh = np.inf
 
-    for calc_nodes in range(n_calc_nodes):
+    for calc_nodes in range(n_calc_nodes + 1): # 0, 1, ..., n_calc_nodes
         if verbose > 0:
             print('#########################')
             print(f'# Calc Nodes: {calc_nodes}')
@@ -1085,7 +1085,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 1000, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 1000, mode : str = 'exhaustive', **kwargs):
 
         '''
         @Params:
@@ -1095,11 +1095,14 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             random_state... for reproducibility
             processes... number of processes for multiprocessing
             max_samples... maximum number of samples on which to fit
+            mode... one of 'exhaustive' or 'hierarchical'
         '''
         self.k = k
         self.n_calc_nodes = n_calc_nodes
         self.max_orders = max_orders
         self.max_samples = max_samples
+        assert mode in ['exhaustive', 'hierarchical'], f'Search mode {mode} is not supported.'
+        self.mode = mode
 
         if processes is None:
             self.processes = multiprocessing.cpu_count()//2
@@ -1147,8 +1150,10 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'max_orders' : self.max_orders, 
             'stop_thresh' : 1e-6
         }
-        res = hierarchical_search(**params)
-        #res = exhaustive_search(**params)
+        if self.mode == 'hierarchical':
+            res = hierarchical_search(**params)
+        else:
+            res = exhaustive_search(**params)
         if verbose > 0:
             print(f'Found graph with loss {res["losses"][0]}')
         self.cgraph = res['graphs'][0]
