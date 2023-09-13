@@ -316,7 +316,7 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
         with open(save_path, 'wb') as handle:
             pickle.dump(res, handle)
 
-def mixing_experiment(n_graphs : int = 1000, k : int = 1, max_exprs_per_epoch : int = 20, random_state : int = None):
+def mixing_experiment(n_graphs : int = 1000, k : int = 1, n_calc_nodes : int = 3, max_exprs_per_epoch : int = 20, random_state : int = None):
     
     save_path = 'results/mixing_error.p'
     if not os.path.exists('results'):
@@ -390,7 +390,7 @@ def mixing_experiment(n_graphs : int = 1000, k : int = 1, max_exprs_per_epoch : 
             subexprs = []
             subexpr_strs = set()
             for expr in gp_exprs[epoch]:
-                tmp = utils.get_subexprs(expr)
+                tmp = utils.get_subexprs_sympy(expr)
                 for subexpr in tmp:
                     if str(subexpr) not in subexpr_strs:
                         subexpr_strs.add(str(subexpr))
@@ -410,7 +410,7 @@ def mixing_experiment(n_graphs : int = 1000, k : int = 1, max_exprs_per_epoch : 
         subexprs = []
         subexpr_strs = set()
         mixings_true = []
-        tmp = utils.get_subexprs(expr_true)
+        tmp = utils.get_subexprs_sympy(expr_true)
         for subexpr in tmp:
             if str(subexpr) not in subexpr_strs:
                 subexpr_strs.add(str(subexpr))

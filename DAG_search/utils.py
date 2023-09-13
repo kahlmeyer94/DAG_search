@@ -32,7 +32,7 @@ def get_components(A):
 # Mixability
 #####################################
 
-def get_subexprs(expr) -> list:
+def get_subexprs_sympy(expr) -> list:
     '''
     Splits an expression into subexpressions.
     @Params:
@@ -45,7 +45,7 @@ def get_subexprs(expr) -> list:
     children = expr.args
     subs = [expr]
     for c in children:
-        subs += get_subexprs(c)
+        subs += get_subexprs_sympy(c)
     return subs
     
 def insert_subexprs(expr1, expr2) -> list:
