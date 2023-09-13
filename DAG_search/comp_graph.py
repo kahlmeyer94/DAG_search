@@ -530,7 +530,7 @@ class CompGraph():
             res_dict[i] = X[i]
 
         for i, const in enumerate(c):
-            res_dict[i + self.inp_dim] = const
+            res_dict[i + self.inp_dim] = sympy.sympify(const)
 
         # others
         for i in self.eval_order[k:]:
