@@ -1,8 +1,131 @@
 import stopit
 import zss
+import numpy as np
+import scipy.stats
 import sympy
 import traceback
 from DAG_search import config
+import warnings
+
+
+#####################################
+# Mixability
+#####################################
+
+def get_subexprs(expr) -> list:
+    '''
+    Splits an expression into subexpressions.
+    @Params:
+        expr... sympy expression
+    @Returns:
+        list of all subexpressions according to sympy
+    '''
+
+    func = expr.func
+    children = expr.args
+    subs = [expr]
+    for c in children:
+        subs += get_subexprs(c)
+    return subs
+    
+def insert_subexprs(expr1, expr2) -> list:
+    '''
+    Creates all subexpressions that are created
+    when placing expr2 and every node of expr1.
+
+    @Params:
+        expr1... sympy expression
+        expr2... sympy expression
+
+    @Returns:
+        List of sympy expression
+    '''
+
+    # insert expr2 at every position of expr1
+    func = expr1.func
+    children = expr1.args
+    if isinstance(expr2, sympy.Number):
+        ret = [expr2]
+    else:
+        ret = [expr2]
+    for i in range(len(children)):
+        child_ret = insert_subexprs(children[i], expr2)
+        for child_expr in child_ret:
+            expr1_c = expr1
+            args_list = [expr1_c.args[idx] for idx in range(len(expr1_c.args))]
+            args_list[i] = child_expr
+            expr1_c = expr1_c.func(*tuple(args_list))
+            ret.append(expr1_c)
+    return ret
+
+def mix_error(expr, population : list, X : np.ndarray, y : np.ndarray, max_error : int = 1000) -> float:
+    '''
+    Mixability as defined by us.
+    Expected performance when using an expression as new subtree.
+
+    @Params:
+        expr... sympy expression
+        population... list of sympy expressions
+        X... input data (shape n_samples x dim)
+        y... output data (length n_samples)
+        max_error... errors are capped at this value
+
+    @Returns
+        Average error when using expr as new subtree
+    '''
+
+
+    x_symbs = [sympy.Symbol(f'x_{i}', real = True) for i in range(X.shape[1])]
+    errors = []
+    if len(y.shape) == 1:
+        ret_shape = (len(y), 1)
+    else:
+        ret_shape = y.shape
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for expr_pop in population:
+            insert_exprs = insert_subexprs(expr_pop, expr) # insert expr at expr_pop
+            for expr_insert in insert_exprs:
+                valid = True
+                
+                try:
+                    with stopit.ThreadingTimeout(2.0, swallow_exc=False) as to_ctx_mgr:
+                        assert to_ctx_mgr.state == to_ctx_mgr.EXECUTING
+                        func = sympy.lambdify(*x_symbs, expr_insert)
+                        pred = func(X)*np.ones(ret_shape)
+                    if to_ctx_mgr:
+                        valid = True
+                    else:
+                        valid = False
+                except (TypeError, KeyError, AttributeError, RecursionError, stopit.utils.TimeoutException):
+                    valid = False
+                
+                if valid and np.all(np.isreal(pred)) and not np.any(np.isnan(pred)):
+                    mse = min(np.mean(np.abs(pred - y)), max_error)
+                    errors.append(mse)
+                else:
+                    errors.append(max_error)
+    return np.mean(errors)
+
+def mean_confidence_interval(data : list, confidence : float = 0.95) -> tuple:
+    '''
+    Confidence interval for the mean of data.
+    [found here: https://stackoverflow.com/questions/15033511/compute-a-confidence-interval-from-sample-data]
+
+    @Params:
+        data... list of numbers where we want to estimate the mean
+        confidence... size of confidence interval
+
+    @Returns:
+        mean, lower, upper for confidence interval
+    '''
+    # 
+    a = 1.0 * np.array(data)
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    return m, m-h, m+h
+
 
 #####################################
 # Symbolic Checks
