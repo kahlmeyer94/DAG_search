@@ -14,23 +14,6 @@ from DAG_search import utils
 from DAG_search import dag_search
 from regressors import regressors
 
-import networkx as nx
-
-def get_components(A):
-    # create graph
-    graph = nx.Graph()
-
-    # add nodes
-    for i in range(len(A)):
-        graph.add_node(i)
-
-
-    # add edges
-    for i in range(len(A)):
-        for j in range(i+1, len(A)):
-            if A[i, j] > 0:
-                graph.add_edge(i, j)
-    return nx.number_connected_components(graph)
 
 def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2):
     '''
@@ -312,7 +295,7 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
 
         A = eq_mat.astype(int)
             
-        n_groups = get_components(A)
+        n_groups = utils.get_components(A)
         print(f'Detected groups: {n_groups}/{topk}')
             
         # Estimate RMSES

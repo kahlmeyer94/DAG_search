@@ -6,7 +6,27 @@ import sympy
 import traceback
 from DAG_search import config
 import warnings
+import networkx as nx
 
+#####################################
+# Locality
+#####################################
+
+def get_components(A):
+    # create graph
+    graph = nx.Graph()
+
+    # add nodes
+    for i in range(len(A)):
+        graph.add_node(i)
+
+
+    # add edges
+    for i in range(len(A)):
+        for j in range(i+1, len(A)):
+            if A[i, j] > 0:
+                graph.add_edge(i, j)
+    return nx.number_connected_components(graph)
 
 #####################################
 # Mixability
