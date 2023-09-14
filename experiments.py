@@ -331,7 +331,7 @@ if __name__ == '__main__':
             'MLP' : (regressors.MLP(random_state = rand_state), False),
             'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
-            'gplearn2' : (regressors.GPlearn2(random_state = rand_state), True),
+            'gplearn2' : (regressors.GPlearn(random_state = rand_state, p_crossover=0.0, p_hoist_mutation=0.0, p_point_mutation=0.9), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
             'dsr' : (regressors.DSR(), True),
         }

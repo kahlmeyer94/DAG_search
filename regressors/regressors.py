@@ -418,58 +418,14 @@ class Operon():
     
 class GPlearn():
     '''
-    Regressor based on gplearn
+    Regressor based on gplearn.
     '''
-    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
-        import gplearn
-        from gplearn.genetic import SymbolicRegressor as GPlearnRegressor
+    def __init__(self, verbose:int = 0, random_state:int = 0, p_crossover:float = 0.9, p_subtree_mutation:float = 0.01, p_hoist_mutation:float = 0.01, p_point_mutation:float = 0.01,  **params):
+        p_values = np.array([p_crossover, p_subtree_mutation, p_hoist_mutation, p_point_mutation])
+        p_values = 0.93*(p_values/p_values.sum())
 
-        self.converter = {
-            'add': lambda x, y : x + y,
-            'sub' : lambda x, y: x - y,
-            'mul': lambda x, y : x * y,
-            'div' : lambda x, y: x / y,
-            'neg': lambda x : -x,
-            'inv': lambda x : 1/x,
-            'sin' : lambda x: sympy.sin(x),
-            'cos' : lambda x: sympy.cos(x),
-            'log' : lambda x: sympy.log(x),
-            'sqrt' : lambda x: sympy.sqrt(x),
-        }
-        funcs = list(self.converter.keys())
-        
-        self.est_gp = GPlearnRegressor(function_set = funcs, verbose = verbose, random_state=random_state)
-        
-        self.X = None
-        self.y = None
-        
-    def fit(self, X, y):
-        assert len(y.shape) == 1
-        self.y = y.copy()
-        if len(X.shape) == 1:
-            self.X = X.reshape(-1, 1).copy()
-        else:
-            self.X = X.copy()
-        for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
-        self.est_gp.fit(self.X, self.y)
 
-    def predict(self, X):
-        assert self.X is not None
-        pred = self.est_gp.predict(X)
-        return pred.flatten()
 
-    def model(self):
-        assert self.X is not None
-        for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
-        return sympy.sympify(str(self.est_gp._program), locals=self.converter)
-
-class GPlearn2():
-    '''
-    Regressor based on gplearn, without crossover!
-    '''
-    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
         import gplearn
         from gplearn.genetic import SymbolicRegressor as GPlearnRegressor
 
@@ -492,11 +448,10 @@ class GPlearn2():
             'function_set' : funcs,
             'verbose' : verbose,
             'random_state' : random_state,
-            'p_crossover' : 0.0,
-            'p_subtree_mutation' : 0.1225,
-            'p_hoist_mutation': 0.1225,
-            'p_point_mutation' : 0.1225,
-            'p_point_replace' : 0.6125
+            'p_crossover' : p_values[0],
+            'p_subtree_mutation' : p_values[1],
+            'p_hoist_mutation': p_values[2],
+            'p_point_mutation' : p_values[3]
         }
 
         self.est_gp = GPlearnRegressor(**params)
@@ -525,8 +480,6 @@ class GPlearn2():
         for i in range(self.X.shape[1]):
             self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
         return sympy.sympify(str(self.est_gp._program), locals=self.converter)
-
-
 
 class DSR():
     '''
