@@ -316,124 +316,11 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
         with open(save_path, 'wb') as handle:
             pickle.dump(res, handle)
 
-def mixing_experiment(n_graphs : int = 1000, k : int = 1, n_calc_nodes : int = 3, max_exprs_per_epoch : int = 20, random_state : int = None):
-    
-    save_path = 'results/mixing_error.p'
-    if not os.path.exists('results'):
-        os.mkdir('results')
-
-    '''
-    All problems are univariate and have one output only
-    '''
-    # Sample reference expressions
-    if random_state is None:
-        np.random.seed(0)
-    else:
-        np.random.seed(random_state)
-    m = 1
-    n = 1
-    print('sampling population')
-    graphs = []
-    for _ in tqdm(range(n_graphs)):
-        graph = dag_search.sample_graph(m, n, k, n_calc_nodes)
-        graphs.append(graph)
-
-    ds_name = 'Univ'
-    load_path = f'datasets/{ds_name}/tasks.p'
-    with open(load_path, 'rb') as handle:
-        task_dict = pickle.load(handle)
-        
-    res_dict = {}
-    for problem in list(task_dict.keys()):
-
-        print('####################')
-        print(f'# {problem}')
-        print('####################')
-        
-        # Select regression problem
-        X, y, expr_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
-        expr_true = expr_true[0]
-
-        print('optimizing population')
-        loss_fkt = dag_search.MSE_loss_fkt(y)
-        population = []
-        for graph in tqdm(graphs):
-            c, _ = dag_search.evaluate_cgraph(graph, X, loss_fkt, opt_mode = 'grid_zoom')
-            population.append(graph.evaluate_symbolic(c = c)[0])
-
-        # Run gplearn
-        reg = regressors.GPlearn(verbose = False, random_state = 0)
-        reg.fit(X, y[:, 0])
-
-        # get top expressions in each epoch
-        converter = reg.converter
-        for i in range(X.shape[1]):
-            converter[f'X{i}'] = sympy.symbols(f'x_{i}')
-
-        gp_exprs = []
-        gp_programs = reg.est_gp._programs
-        for epoch in tqdm(range(len(gp_programs))):
-            top_programs = [p for p in gp_programs[epoch] if p is not None]
-            scores = [p.fitness_ for p in top_programs]
-            top_idx = np.argsort(scores)[:max_exprs_per_epoch]
-            
-            exprs = [sympy.sympify(str(top_programs[idx]), locals=converter) for idx in top_idx]
-            gp_exprs.append(exprs)
-        
-
-        # calculate mixing errors
-        max_size = 50
-        mix_stats = {}
-        for epoch in range(len(gp_exprs)):
-            print(f'Problem {problem}, Epoch: {epoch}')
-            # collect all subexpression among top expressions
-            subexprs = []
-            subexpr_strs = set()
-            for expr in gp_exprs[epoch]:
-                tmp = utils.get_subexprs_sympy(expr)
-                for subexpr in tmp:
-                    if str(subexpr) not in subexpr_strs:
-                        subexpr_strs.add(str(subexpr))
-                        subexprs.append(subexpr)
-            # score mixability for each subexpression
-            mixings = []
-            for subexpr in tqdm(subexprs):
-                if utils.tree_size(subexpr) <= max_size:
-                    mix = utils.mix_error(subexpr, population, X, y)
-                    mixings.append(mix)
-            mix_stats[epoch] = mixings
-            
-            print(np.mean(mixings))
-
-        # mixability for ground truth
-        print('ground truth')
-        subexprs = []
-        subexpr_strs = set()
-        mixings_true = []
-        tmp = utils.get_subexprs_sympy(expr_true)
-        for subexpr in tmp:
-            if str(subexpr) not in subexpr_strs:
-                subexpr_strs.add(str(subexpr))
-                subexprs.append(subexpr)
-        mixings = []
-        for subexpr in tqdm(subexprs):
-            if utils.tree_size(subexpr) <= max_size:
-                mix = utils.mix_error(subexpr, population, X, y)
-                mixings_true.append(mix)
-        mix_stats['true'] = mixings_true
-
-        res_dict[problem] = mix_stats
-        with open(save_path, 'wb') as handle:
-            pickle.dump(res_dict, handle)
-
 if __name__ == '__main__':
 
-    # mixing errors
-    if True:
-        mixing_experiment()
 
     # recovery experiment
-    if False:
+    if True:
         overwrite = False
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
@@ -444,6 +331,7 @@ if __name__ == '__main__':
             'MLP' : (regressors.MLP(random_state = rand_state), False),
             'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
+            'gplearn2' : (regressors.GPlearn2(random_state = rand_state), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
             'dsr' : (regressors.DSR(), True),
         }
