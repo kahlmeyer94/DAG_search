@@ -334,7 +334,9 @@ if __name__ == '__main__':
             'gplearn_local' : (regressors.GPlearn_local(random_state=rand_state), True),
             'dsr' : (regressors.DSR(), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
-            'DAGSearch_large' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=10), True),
+            'DAGSearch_6' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=6), True),
+            'DAGSearch_8' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=8), True),
+            'DAGSearch_10' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=10), True),
         }
         for ds_name in problems:
             for regressor_name in regs:
