@@ -321,10 +321,9 @@ if __name__ == '__main__':
 
     # recovery experiment
     if True:
-        overwrite = True
+        overwrite = False
         rand_state = 0
-        #problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        problems = ['Feynman']
+        problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         regs = {
             'linreg' : (regressors.LinReg(), True),
             'polyreg2' : (regressors.PolyReg(degree= 2), True),
@@ -332,8 +331,10 @@ if __name__ == '__main__':
             'MLP' : (regressors.MLP(random_state = rand_state), False),
             'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
+            'gplearn_local' : (regressors.GPlearn_local(random_state=rand_state), True),
             'dsr' : (regressors.DSR(), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
+            'DAGSearch_large' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=10), True),
         }
         for ds_name in problems:
             for regressor_name in regs:
