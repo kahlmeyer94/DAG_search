@@ -420,7 +420,7 @@ class GPlearn():
     '''
     Regressor based on gplearn.
     '''
-    def __init__(self, verbose:int = 0, random_state:int = 0, p_crossover:float = 0.9, p_subtree_mutation:float = 0.01, p_hoist_mutation:float = 0.01, p_point_mutation:float = 0.01,  **params):
+    def __init__(self, verbose:int = 0, random_state:int = 0, p_crossover:float = 0.9, p_subtree_mutation:float = 0.01, p_hoist_mutation:float = 0.01, p_point_mutation:float = 0.01,  generations:int = 20, **params):
         p_values = np.array([p_crossover, p_subtree_mutation, p_hoist_mutation, p_point_mutation])
         p_values = 0.93*(p_values/p_values.sum())
 
@@ -451,7 +451,8 @@ class GPlearn():
             'p_crossover' : p_values[0],
             'p_subtree_mutation' : p_values[1],
             'p_hoist_mutation': p_values[2],
-            'p_point_mutation' : p_values[3]
+            'p_point_mutation' : p_values[3],
+            'generations' : generations
         }
 
         self.est_gp = GPlearnRegressor(**params)
