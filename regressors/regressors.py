@@ -475,7 +475,7 @@ class GPlearn():
 
 class GPlearn_local():
     '''
-    Regressor based on gplearn.
+    Regressor based on gplearn. No crossover!
     '''
     def __init__(self, verbose:int = 0, random_state:int = 0, **params):
 
