@@ -534,6 +534,79 @@ class GPlearn_local():
             self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
         return sympy.sympify(str(self.est_gp._program), locals=self.converter)
 
+class GPlearn_restart():
+    '''
+    Regressor based on gplearn. No crossover!
+    '''
+    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
+
+        import gplearn
+        from gplearn.genetic import SymbolicRegressor as GPlearnRegressor
+
+        self.converter = {
+            'add': lambda x, y : x + y,
+            'sub' : lambda x, y: x - y,
+            'mul': lambda x, y : x * y,
+            'div' : lambda x, y: x / y,
+            'neg': lambda x : -x,
+            'inv': lambda x : 1/x,
+            'sin' : lambda x: sympy.sin(x),
+            'cos' : lambda x: sympy.cos(x),
+            'log' : lambda x: sympy.log(x),
+            'sqrt' : lambda x: sympy.sqrt(x),
+        }
+        funcs = list(self.converter.keys())
+        
+        
+        params = {
+            'function_set' : funcs,
+            'verbose' : verbose,
+            'random_state' : random_state,
+            'p_crossover' : 0.0,
+            'p_subtree_mutation' : 0.4,
+            'p_hoist_mutation' : 0.4,
+            'p_point_mutation' : 0.2
+        }
+        self.gps = []
+        for i in range(4):
+            params['random_state'] = random_state + i
+            params['generations'] = 5
+            gp = GPlearnRegressor(**params)
+            self.gps.append(gp)
+
+        self.est_gp = None
+        
+        self.X = None
+        self.y = None
+        
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        for i in range(self.X.shape[1]):
+            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
+
+        for i, gp in enumerate(self.gps):
+            self.gps[i] = gp.fit(self.X, self.y)
+
+        # evaluate
+        scores = [gp._program.fitness_ for gp in self.gps]
+        self.est_gp = self.gps[np.argmin(scores)]
+
+    def predict(self, X):
+        assert self.X is not None
+        pred = self.est_gp.predict(X)
+        return pred.flatten()
+
+    def model(self):
+        assert self.X is not None
+        for i in range(self.X.shape[1]):
+            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
+        return sympy.sympify(str(self.est_gp._program), locals=self.converter)
+
 class DSR():
     '''
     Regressor based on deep symbolic regression
