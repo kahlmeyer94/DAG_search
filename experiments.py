@@ -450,13 +450,14 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
 if __name__ == '__main__':
     
     # genetic experiment
-    if True:
+    if False:
         genetic_experiment('Feynman')
         genetic_experiment('Nguyen')
         genetic_experiment('Strogatz')
+        genetic_experiment('Univ')
 
     # recovery experiment
-    if True:
+    if False:
         overwrite = False
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
@@ -467,7 +468,6 @@ if __name__ == '__main__':
             'MLP' : (regressors.MLP(random_state = rand_state), False),
             'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
-            'gplearn_local' : (regressors.GPlearn_local(random_state=rand_state), True),
             'dsr' : (regressors.DSR(), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
             'DAGSearch_3' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=3), True),
