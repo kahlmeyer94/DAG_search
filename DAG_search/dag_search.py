@@ -1158,7 +1158,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         else:
             res = exhaustive_search(**params)
 
-        # optimizing constants of top 10 DAGs
+        # optimizing constants of top DAGs
         if verbose > 0:
             print('Optimizing best constants')
         loss_fkt = MSE_loss_fkt(y)
