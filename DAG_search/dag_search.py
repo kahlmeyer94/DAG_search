@@ -1085,7 +1085,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 1000, mode : str = 'exhaustive', **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', **kwargs):
 
         '''
         @Params:
@@ -1130,21 +1130,24 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             sub_idx = np.arange(len(X))
             np.random.shuffle(sub_idx)
             sub_idx = sub_idx[:self.max_samples]
-            X = X[sub_idx]
-            y = y[sub_idx]
+            X_sub = X[sub_idx]
+            y_sub = y[sub_idx]
+        else:
+            X_sub = X
+            y_sub = y
 
-        y_part = y.reshape(-1, 1)
-        m = X.shape[1]
+        y_part = y_sub.reshape(-1, 1)
+        m = X_sub.shape[1]
         n = 1
         loss_fkt = MSE_loss_fkt(y_part)
         params = {
-            'X' : X,
+            'X' : X_sub,
             'n_outps' : n,
             'loss_fkt' : loss_fkt,
             'k' : self.k,
             'n_calc_nodes' : self.n_calc_nodes,
             'n_processes' : self.processes,
-            'topk' : 1,
+            'topk' : 10,
             'opt_mode' : 'grid_zoom',
             'verbose' : verbose,
             'max_orders' : self.max_orders, 
@@ -1154,10 +1157,24 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             res = hierarchical_search(**params)
         else:
             res = exhaustive_search(**params)
+
+        # optimizing constants of top 10 DAGs
         if verbose > 0:
-            print(f'Found graph with loss {res["losses"][0]}')
-        self.cgraph = res['graphs'][0]
-        self.consts = res['consts'][0]
+            print('Optimizing best constants')
+        loss_fkt = MSE_loss_fkt(y)
+        losses = []
+        consts = []
+        for graph, c in zip(res['graphs'], res['consts']):
+            new_c, loss = get_consts_opt(graph, X, loss_fkt, c_start = c)
+            losses.append(loss)
+            consts.append(new_c)
+        best_idx = np.argmin(losses)
+        if verbose > 0:
+            print(f'Found graph with loss {losses[best_idx]}')
+
+        
+        self.cgraph = res['graphs'][best_idx]
+        self.consts = consts[best_idx]
 
     def predict(self, X:np.ndarray, return_grad : bool = False):
         '''
