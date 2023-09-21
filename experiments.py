@@ -25,6 +25,7 @@ def genetic_experiment(ds_name : str, n_tries : int = 10, test_size : float = 0.
     load_path = f'datasets/{ds_name}/tasks.p'
     save_path_crossover = f'results/{ds_name}/crossover_results.p'
     save_path_local = f'results/{ds_name}/local_results.p'
+    save_path_restart = f'results/{ds_name}/restart_results.p'
 
     if not os.path.exists('results'):
         os.mkdir('results')
@@ -33,6 +34,8 @@ def genetic_experiment(ds_name : str, n_tries : int = 10, test_size : float = 0.
 
     results_local = {}
     results_crossover = {}
+    results_restart = {}
+
     with open(load_path, 'rb') as handle:
         task_dict = pickle.load(handle)
     problems = list(task_dict.keys())
@@ -43,106 +46,161 @@ def genetic_experiment(ds_name : str, n_tries : int = 10, test_size : float = 0.
 
         crossover_dict = {}
         local_dict = {}
+        restart_dict = {}
         for rand_state in range(n_tries):
-            # 1. Crossover
-            print('####################')
-            print(f'Seed {rand_state}:\tCrossover on {problem}')
-            print('####################')
-            regressor = regressors.GPlearn(random_state = rand_state)
+            
+            if False:
+                # 1. Crossover
+                print('####################')
+                print(f'Seed {rand_state}:\tCrossover on {problem}')
+                print('####################')
+                regressor = regressors.GPlearn(random_state = rand_state)
 
-            all_rec = []
-            all_pred_train = []
-            all_pred_test = []
-            all_y_train = []
-            all_y_test = []
-            all_expr = []
-            all_times = []
+                all_rec = []
+                all_pred_train = []
+                all_pred_test = []
+                all_y_train = []
+                all_y_test = []
+                all_expr = []
+                all_times = []
 
-            for idx in range(y.shape[1]):
-                expr_true = exprs_true[idx]
-                y_part = y_train[:, idx]
+                for idx in range(y.shape[1]):
+                    expr_true = exprs_true[idx]
+                    y_part = y_train[:, idx]
 
-                s_time = timer()
-                regressor.fit(X_train, y_part)
-                e_time = timer()
-                all_times.append(e_time - s_time)
+                    s_time = timer()
+                    regressor.fit(X_train, y_part)
+                    e_time = timer()
+                    all_times.append(e_time - s_time)
 
-                pred = regressor.predict(X_train)
-                all_pred_train.append(pred)
-                all_y_train.append(y_part)
+                    pred = regressor.predict(X_train)
+                    all_pred_train.append(pred)
+                    all_y_train.append(y_part)
 
-                pred = regressor.predict(X_test)
-                all_pred_test.append(pred)
-                all_y_test.append(y_test[:, idx])
+                    pred = regressor.predict(X_test)
+                    all_pred_test.append(pred)
+                    all_y_test.append(y_test[:, idx])
 
-                expr_est = regressor.model()
-                all_expr.append(expr_est)
-                rec = utils.symb_eq(expr_est, expr_true) 
-                all_rec.append(rec)
+                    expr_est = regressor.model()
+                    all_expr.append(expr_est)
+                    rec = utils.symb_eq(expr_est, expr_true) 
+                    all_rec.append(rec)
 
-    
-            crossover_dict[rand_state] = {
-                'recovery' : all_rec,
-                'exprs' : all_expr,
-                'y_train' : all_y_train,
-                'y_test' : all_y_test,
-                'pred_train' : all_pred_train,
-                'pred_test' : all_pred_test,
-                'times' : all_times
-            }
-            results_crossover[problem] = crossover_dict
-            with open(save_path_crossover, 'wb') as handle:
-                pickle.dump(results_crossover, handle)
+        
+                crossover_dict[rand_state] = {
+                    'recovery' : all_rec,
+                    'exprs' : all_expr,
+                    'y_train' : all_y_train,
+                    'y_test' : all_y_test,
+                    'pred_train' : all_pred_train,
+                    'pred_test' : all_pred_test,
+                    'times' : all_times
+                }
+                results_crossover[problem] = crossover_dict
+                with open(save_path_crossover, 'wb') as handle:
+                    pickle.dump(results_crossover, handle)
 
-            # 1. Local Search
-            print('####################')
-            print(f'Seed {rand_state}:\tLocal on {problem}')
-            print('####################')
-            regressor = regressors.GPlearn_local(random_state = rand_state)
+            if False:
+                # 1. Local Search
+                print('####################')
+                print(f'Seed {rand_state}:\tLocal on {problem}')
+                print('####################')
+                regressor = regressors.GPlearn_local(random_state = rand_state)
 
-            all_rec = []
-            all_pred_train = []
-            all_pred_test = []
-            all_y_train = []
-            all_y_test = []
-            all_expr = []
-            all_times = []
+                all_rec = []
+                all_pred_train = []
+                all_pred_test = []
+                all_y_train = []
+                all_y_test = []
+                all_expr = []
+                all_times = []
 
-            for idx in range(y.shape[1]):
-                expr_true = exprs_true[idx]
-                y_part = y_train[:, idx]
+                for idx in range(y.shape[1]):
+                    expr_true = exprs_true[idx]
+                    y_part = y_train[:, idx]
 
-                s_time = timer()
-                regressor.fit(X_train, y_part)
-                e_time = timer()
-                all_times.append(e_time - s_time)
+                    s_time = timer()
+                    regressor.fit(X_train, y_part)
+                    e_time = timer()
+                    all_times.append(e_time - s_time)
 
-                pred = regressor.predict(X_train)
-                all_pred_train.append(pred)
-                all_y_train.append(y_part)
+                    pred = regressor.predict(X_train)
+                    all_pred_train.append(pred)
+                    all_y_train.append(y_part)
 
-                pred = regressor.predict(X_test)
-                all_pred_test.append(pred)
-                all_y_test.append(y_test[:, idx])
+                    pred = regressor.predict(X_test)
+                    all_pred_test.append(pred)
+                    all_y_test.append(y_test[:, idx])
 
-                expr_est = regressor.model()
-                all_expr.append(expr_est)
-                rec = utils.symb_eq(expr_est, expr_true) 
-                all_rec.append(rec)
+                    expr_est = regressor.model()
+                    all_expr.append(expr_est)
+                    rec = utils.symb_eq(expr_est, expr_true) 
+                    all_rec.append(rec)
 
-    
-            local_dict[rand_state] = {
-                'recovery' : all_rec,
-                'exprs' : all_expr,
-                'y_train' : all_y_train,
-                'y_test' : all_y_test,
-                'pred_train' : all_pred_train,
-                'pred_test' : all_pred_test,
-                'times' : all_times
-            }
-            results_local[problem] = local_dict
-            with open(save_path_local, 'wb') as handle:
-                pickle.dump(results_local, handle)
+        
+                local_dict[rand_state] = {
+                    'recovery' : all_rec,
+                    'exprs' : all_expr,
+                    'y_train' : all_y_train,
+                    'y_test' : all_y_test,
+                    'pred_train' : all_pred_train,
+                    'pred_test' : all_pred_test,
+                    'times' : all_times
+                }
+                results_local[problem] = local_dict
+                with open(save_path_local, 'wb') as handle:
+                    pickle.dump(results_local, handle)
+
+            if True:
+                # 1. Restart Search
+                print('####################')
+                print(f'Seed {rand_state}:\tRestart on {problem}')
+                print('####################')
+                regressor = regressors.GPlearn_restart(random_state = rand_state)
+
+                all_rec = []
+                all_pred_train = []
+                all_pred_test = []
+                all_y_train = []
+                all_y_test = []
+                all_expr = []
+                all_times = []
+
+                for idx in range(y.shape[1]):
+                    expr_true = exprs_true[idx]
+                    y_part = y_train[:, idx]
+
+                    s_time = timer()
+                    regressor.fit(X_train, y_part)
+                    e_time = timer()
+                    all_times.append(e_time - s_time)
+
+                    pred = regressor.predict(X_train)
+                    all_pred_train.append(pred)
+                    all_y_train.append(y_part)
+
+                    pred = regressor.predict(X_test)
+                    all_pred_test.append(pred)
+                    all_y_test.append(y_test[:, idx])
+
+                    expr_est = regressor.model()
+                    all_expr.append(expr_est)
+                    rec = utils.symb_eq(expr_est, expr_true) 
+                    all_rec.append(rec)
+
+        
+                restart_dict[rand_state] = {
+                    'recovery' : all_rec,
+                    'exprs' : all_expr,
+                    'y_train' : all_y_train,
+                    'y_test' : all_y_test,
+                    'pred_train' : all_pred_train,
+                    'pred_test' : all_pred_test,
+                    'times' : all_times
+                }
+                results_restart[problem] = restart_dict
+                with open(save_path_restart, 'wb') as handle:
+                    pickle.dump(results_restart, handle)
 
 def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2):
     '''
@@ -450,7 +508,7 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
 if __name__ == '__main__':
     
     # genetic experiment
-    if False:
+    if True:
         genetic_experiment('Feynman')
         genetic_experiment('Nguyen')
         genetic_experiment('Strogatz')

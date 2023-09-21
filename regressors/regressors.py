@@ -538,7 +538,7 @@ class GPlearn_restart():
     '''
     Regressor based on gplearn. No crossover!
     '''
-    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
+    def __init__(self, verbose:int = 0, random_state:int = 0, n_restarts:int = 5, **params):
 
         import gplearn
         from gplearn.genetic import SymbolicRegressor as GPlearnRegressor
@@ -568,9 +568,8 @@ class GPlearn_restart():
             'p_point_mutation' : 0.2
         }
         self.gps = []
-        for i in range(4):
-            params['random_state'] = random_state + i
-            params['generations'] = 5
+        for i in range(n_restarts):
+            params['random_state'] = random_state + 100*i
             gp = GPlearnRegressor(**params)
             self.gps.append(gp)
 
