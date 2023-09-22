@@ -368,7 +368,7 @@ def proximity_experiment(random_state = None):
     for i, graph1 in tqdm(enumerate(graphs), total = len(graphs)):
         for j, graph2 in enumerate(graphs):
             if i <= j:
-                r = utils.edit_distance(graph1, graph2)
+                r = utils.graph_edit_distance(graph1, graph2)
                 edit_mat[i, j] = r
                 edit_mat[j, i] = r
 

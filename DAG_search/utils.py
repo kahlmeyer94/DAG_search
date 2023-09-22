@@ -455,7 +455,24 @@ def get_tree(graph, idx):
             ret.addkid(get_tree(graph, child))
         return ret
     
-def edit_distance(graph1, graph2):
+def graph_edit_distance(graph1, graph2):
     tree1 = graph2trees(graph1)[0]
     tree2 = graph2trees(graph2)[0]
+    return zss.simple_distance(tree1, tree2)
+
+
+def expr2tree(expr):
+    op = str(expr.func)
+    children = expr.args
+    if len(children) == 0:
+        return zss.Node(op)
+    else:
+        ret = zss.Node(op)
+        for child in children:
+            ret.addkid(expr2tree(child))
+        return ret
+
+def expr_edit_distance(expr1, expr2):
+    tree1 = expr2tree(expr1)
+    tree2 = expr2tree(expr2)
     return zss.simple_distance(tree1, tree2)
