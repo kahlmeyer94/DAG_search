@@ -316,7 +316,7 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
             pickle.dump(res, handle)
 
 def fdc_experiment(ds_name : str, n_graphs :int = 10000, max_tries : int = 10, random_state : int = None):
-    if rand_state is not None:
+    if random_state is not None:
         np.random.seed(random_state)
 
     load_path = f'datasets/{ds_name}/tasks.p'
