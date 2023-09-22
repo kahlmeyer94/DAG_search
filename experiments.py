@@ -315,13 +315,90 @@ def solutions_experiment(topk : int = 100, n_calc_nodes : int = 5, k : int = 1, 
         with open(save_path, 'wb') as handle:
             pickle.dump(res, handle)
 
+def fdc_experiment(ds_name : str, n_graphs :int = 10000, max_tries : int = 10, random_state : int = None):
+    if rand_state is not None:
+        np.random.seed(random_state)
+
+    load_path = f'datasets/{ds_name}/tasks.p'
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    save_path = f'results/{ds_name}/fdc.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
+    res_dict = {}
+    
+    # 1. get Problems
+    task_X = []
+    task_y = []
+    task_exprs = []
+    task_problems = []
+    for problem in task_dict:
+        X = task_dict[problem]['X']
+        y = task_dict[problem]['y']
+        exprs = task_dict[problem]['expr']
+        for i in range(y.shape[1]):
+            task_X.append(X)
+            task_y.append(y[:, i])
+            task_exprs.append(exprs[i])
+            task_problems.append(f'{problem}_{i}')
+
+
+    for idx in range(len(task_problems)):
+        X, y, expr_true = task_X[idx], task_y[idx], task_exprs[idx]
+        problem = task_problems[idx]
+        loss_fkt = dag_search.MSE_loss_fkt(y)
+        
+        
+        # 2. sample population
+        
+        graphs = []
+        consts = []
+        losses = []
+        exprs = []
+        try_counter = 0
+        while (len(graphs) < n_graphs) and (try_counter < max_tries): 
+            graph = dag_search.sample_graph(m = X.shape[1], n = 1, k = 1, n_calc_nodes = 3)
+            c, loss = dag_search.evaluate_cgraph(graph, X, loss_fkt, opt_mode = 'grid_zoom')
+            if loss < 1000:
+                losses.append(loss)
+                graphs.append(graph)
+                consts.append(c)
+                exprs.append(graph.evaluate_symbolic(c = c)[0])
+                try_counter = 0
+            else:
+                try_counter += 1
+                
+        # 3. get distances to ground truth
+        dists = []
+        for expr in exprs:
+            dist = utils.expr_edit_distance(expr, expr_true)
+            dists.append(dist)
+            
+        # 4. Correlation coefficient (only if sufficient)
+        if len(dists) > 10:
+            r, p_value = pearsonr(losses, dists)
+            res_dict[task_problems[idx]] = r
+            print(f'Problem {task_problems[idx]}, CDF: {r}')
+
+    # save
+    with open(save_path, 'wb') as handle:
+        pickle.dump(res_dict, handle)
 
 
 if __name__ == '__main__':
-    
+
+    # Fitness-distance correlation experiment
+    if True:
+        fdc_experiment('Feynman')
+        fdc_experiment('Strogatz')
+        fdc_experiment('Nguyen')
+        fdc_experiment('Univ')
+
  
     # recovery experiment
-    if True:
+    if False:
         overwrite = False
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
