@@ -386,17 +386,95 @@ def fdc_experiment(ds_name : str, n_graphs :int = 10000, max_tries : int = 10, r
     with open(save_path, 'wb') as handle:
         pickle.dump(res_dict, handle)
 
+def local_minima_experiment(ds_name : str, n_graphs :int = 10000, max_tries : int = 10, random_state : int = None):
+    if random_state is not None:
+        np.random.seed(random_state)
+
+    load_path = f'datasets/{ds_name}/tasks.p'
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    save_path = f'results/{ds_name}/local_minima.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
+    res_dict = {}
+    
+    # 1. get Problems
+    task_X = []
+    task_y = []
+    task_exprs = []
+    task_problems = []
+    for problem in task_dict:
+        X = task_dict[problem]['X']
+        y = task_dict[problem]['y']
+        exprs = task_dict[problem]['expr']
+        for i in range(y.shape[1]):
+            task_X.append(X)
+            task_y.append(y[:, i])
+            task_exprs.append(exprs[i])
+            task_problems.append(f'{problem}_{i}')
+
+
+    for idx in range(len(task_problems)):
+        X, y, expr_true = task_X[idx], task_y[idx], task_exprs[idx]
+        problem = task_problems[idx]
+        loss_fkt = dag_search.MSE_loss_fkt(y)
+        
+        
+        # 2. sample population
+        
+        graphs = []
+        consts = []
+        losses = []
+        exprs = []
+        try_counter = 0
+        while (len(graphs) < n_graphs) and (try_counter < max_tries): 
+            graph = dag_search.sample_graph(m = X.shape[1], n = 1, k = 1, n_calc_nodes = 3)
+            c, loss = dag_search.evaluate_cgraph(graph, X, loss_fkt, opt_mode = 'grid_zoom')
+            if loss < 1000:
+                losses.append(loss)
+                graphs.append(graph)
+                consts.append(c)
+                exprs.append(graph.evaluate_symbolic(c = c)[0])
+                try_counter = 0
+            else:
+                try_counter += 1
+                
+        if len(exprs) > 10:       
+            # 3. get distance matrix
+            print(task_problems[idx], len(exprs))
+            dist_mat = np.zeros((len(exprs), len(exprs)))
+            for i, expr1 in tqdm(enumerate(exprs), total = len(exprs)):
+                for j, expr2 in enumerate(exprs):
+                    if i <= j:
+                        r = utils.expr_edit_distance(expr1, expr2)
+                        dist_mat[i, j] = r
+                        dist_mat[j, i] = r
+            res_dict[task_problems[idx]] = {'distances' : dist_mat, 'losses' : np.array(losses)}
+            
+            
+            # save
+            with open(save_path, 'wb') as handle:
+                pickle.dump(res_dict, handle)
 
 if __name__ == '__main__':
 
-    # Fitness-distance correlation experiment
+
+    # Local Minima experiment
     if True:
+        local_minima_experiment('Feynman')
+        local_minima_experiment('Strogatz')
+        local_minima_experiment('Nguyen')
+        local_minima_experiment('Univ')
+
+    # Fitness-distance correlation experiment
+    if False:
         fdc_experiment('Feynman')
         fdc_experiment('Strogatz')
         fdc_experiment('Nguyen')
         fdc_experiment('Univ')
 
- 
     # recovery experiment
     if False:
         overwrite = False
@@ -436,10 +514,6 @@ if __name__ == '__main__':
             if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
                 regressor, is_symb = regs[regressor_name]
                 recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
-
-    # local minima experiment
-    if False:
-        solutions_experiment(n_graphs=10000, random_state=0)
 
     # proximity experiment
     if False:
