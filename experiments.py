@@ -386,7 +386,7 @@ def fdc_experiment(ds_name : str, n_graphs :int = 10000, max_tries : int = 10, r
     with open(save_path, 'wb') as handle:
         pickle.dump(res_dict, handle)
 
-def local_minima_experiment(ds_name : str, n_graphs :int = 10000, max_tries : int = 10, random_state : int = None):
+def local_minima_experiment(ds_name : str, n_graphs :int = 1000, max_tries : int = 10, random_state : int = None):
     if random_state is not None:
         np.random.seed(random_state)
 
@@ -440,29 +440,103 @@ def local_minima_experiment(ds_name : str, n_graphs :int = 10000, max_tries : in
                 try_counter = 0
             else:
                 try_counter += 1
+        losses = np.array(losses)
                 
         if len(exprs) > 10:       
-            # 3. get distance matrix
-            print(task_problems[idx], len(exprs))
-            dist_mat = np.zeros((len(exprs), len(exprs)))
-            for i, expr1 in tqdm(enumerate(exprs), total = len(exprs)):
-                for j, expr2 in enumerate(exprs):
-                    if i <= j:
-                        r = utils.expr_edit_distance(expr1, expr2)
-                        dist_mat[i, j] = r
-                        dist_mat[j, i] = r
-            res_dict[task_problems[idx]] = {'distances' : dist_mat, 'losses' : np.array(losses)}
-            
+            # 3. collect local minima
+            # check: does expression have connection to anyone better? -> no local minimum else: local minimum
+            sort_idx = np.argsort(losses)
+            minima = np.ones(len(losses)).astype(bool)
+            for i in tqdm(range(len(losses))):
+                idx1 = sort_idx[i]
+                expr1 = exprs[idx1]
+                for j in range(i):
+                    idx2 = sort_idx[j]
+                    expr2 = exprs[idx2]
+                    r = utils.expr_edit_distance(expr1, expr2)
+                    if r == 1:
+                        minima[idx1] = False
+                        break
+                
+            ratio = np.sum(minima)/len(minima)
+            print(problem, ratio)
+
+            res_dict[task_problems[idx]] = ratio
             
             # save
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle)
 
+def scaling_experiment(ds_name : str, n_tries : int = 10, inter_nodes : list = [3, 4, 5, 6], orders :list = [50000, 100000, 200000, 400000], test_size : float = 0.2):
+    
+    # how to access: [rand_state][n_calc_nodes][max_orders][problem]
+
+    load_path = f'datasets/{ds_name}/tasks.p'
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    save_path = f'results/{ds_name}/scalings.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
+    
+    res_dict = {}
+    for rand_state in range(n_tries):
+        res_dict[rand_state] = {}
+        for n_calc_nodes in inter_nodes:
+            res_dict[rand_state][n_calc_nodes] = {}
+            for max_orders in orders:
+                res_dict[rand_state][n_calc_nodes][max_orders] = {}
+                regressor = dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
+                for problem in task_dict:
+                    res_dict[rand_state][n_calc_nodes][max_orders][problem] = {}
+                    print('####################')
+                    print(f'# Random State: {rand_state}, Nodes: {n_calc_nodes}, Orders: {max_orders}, Problem: {problem}')
+                    print('####################')
+
+                    X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
+
+                    all_rec = []
+                    all_expr = []
+                    all_times = []
+
+
+                    for idx in range(y.shape[1]):
+                        expr_true = exprs_true[idx]
+                        y_part = y[:, idx]
+
+                        s_time = timer()
+                        regressor.fit(X, y_part)
+                        e_time = timer()
+                        all_times.append(e_time - s_time)
+
+                        expr_est = regressor.model()
+                        all_expr.append(expr_est)
+                        rec = utils.symb_eq(expr_est, expr_true) 
+                        all_rec.append(rec)
+
+    
+                    res_dict[rand_state][n_calc_nodes][max_orders][problem] = {
+                        'recovery' : all_rec,
+                        'exprs' : all_expr,
+                        'times' : all_times
+                    }   
+                    with open(save_path, 'wb') as handle:
+                        pickle.dump(res_dict, handle) 
+
+
+
 if __name__ == '__main__':
 
+    # Scaling experiment
+    if True:
+        scaling_experiment('Strogatz')
+        scaling_experiment('Nguyen')
+        scaling_experiment('Univ')
+        scaling_experiment('Feynman')
 
     # Local Minima experiment
-    if True:
+    if False:
         local_minima_experiment('Feynman')
         local_minima_experiment('Strogatz')
         local_minima_experiment('Nguyen')
@@ -488,13 +562,7 @@ if __name__ == '__main__':
             'operon' : (regressors.Operon(random_state = rand_state), True),
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'dsr' : (regressors.DSR(), True),
-            'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True),
-            'DAGSearch_nodes_3' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=3), True),
-            'DAGSearch_nodes_5' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=5), True),
-            'DAGSearch_nodes_6' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes=6), True),
-            'DAGSearch_orders_100000' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, max_orders = int(1e4)), True),
-            'DAGSearch_orders_400000' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, max_orders = int(4e5)), True),
-            'DAGSearch_orders_600000' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state, max_orders = int(6e5)), True),
+            'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
