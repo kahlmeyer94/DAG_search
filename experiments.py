@@ -629,6 +629,39 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
                 with open(save_path, 'wb') as handle:
                     pickle.dump(results_dict, handle) 
 
+def oscillation_experiment():
+    np.random.seed(0)
+    X = np.random.rand(100, 1)*1.5
+    y = np.exp(-X[:, 0])*np.cos(2*np.pi*X[:, 0])
+
+    save_path = 'results/oscillation.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+
+    # try all regressors
+    regs = {
+        'linreg' : regressors.LinReg(),
+        'polyreg2' : regressors.PolyReg(degree= 2),
+        'polyreg3' : regressors.PolyReg(degree= 3),
+        'operon' : regressors.Operon(random_state = 0),
+        'gplearn' : regressors.GPlearn(random_state = 0),
+        'dsr' : regressors.DSR(),
+        'DAGSearch' : dag_search.DAGRegressor(processes = 10, random_state = 0), 
+    }
+    res_dict = {}
+    for reg_name in regs:
+        print(reg_name)
+        regressor = regs[reg_name]
+        regressor.fit(X, y)
+
+        res_dict[reg_name] = {
+            'X' : X,
+            'y' : y,
+            'pred' : regressor.predict(X),
+            'model' : regressor.model()
+        }
+        with open(save_path, 'wb') as handle:
+            pickle.dump(res_dict, handle) 
 
 
 if __name__ == '__main__':
@@ -641,7 +674,7 @@ if __name__ == '__main__':
         covariance_experiment('Feynman')
 
     # Scaling experiment
-    if True:
+    if False:
         scaling_experiment('Strogatz')
         scaling_experiment('Nguyen')
         scaling_experiment('Univ')
