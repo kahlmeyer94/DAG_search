@@ -666,6 +666,9 @@ def oscillation_experiment():
 
 if __name__ == '__main__':
 
+    if True:
+        oscillation_experiment()
+
     # Covariance experiment
     if False:
         covariance_experiment('Strogatz')
