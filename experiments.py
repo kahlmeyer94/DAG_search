@@ -467,7 +467,7 @@ def local_minima_experiment(ds_name : str, n_graphs :int = 1000, max_tries : int
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle)
 
-def scaling_experiment(ds_name : str, n_tries : int = 10, inter_nodes : list = [3, 4, 5, 6], orders :list = [50000, 100000, 200000, 400000], test_size : float = 0.2):
+def scaling_experiment(ds_name : str, n_tries : int = 5, inter_nodes : list = [1, 2, 3, 4], orders :list = [10000, 50000, 100000, 200000], test_size : float = 0.2):
     
     # how to access: [rand_state][n_calc_nodes][max_orders][problem]
 
@@ -480,53 +480,165 @@ def scaling_experiment(ds_name : str, n_tries : int = 10, inter_nodes : list = [
     if not os.path.exists(f'results/{ds_name}'):
         os.mkdir(f'results/{ds_name}')
     
-    res_dict = {}
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as handle:
+            res_dict = pickle.load(handle)
+    else:
+        res_dict = {}
+
     for rand_state in range(n_tries):
-        res_dict[rand_state] = {}
+        if rand_state not in res_dict:
+            res_dict[rand_state] = {}
         for n_calc_nodes in inter_nodes:
-            res_dict[rand_state][n_calc_nodes] = {}
+            if n_calc_nodes not in res_dict[rand_state]:
+                res_dict[rand_state][n_calc_nodes] = {}
             for max_orders in orders:
-                res_dict[rand_state][n_calc_nodes][max_orders] = {}
+                if max_orders not in res_dict[rand_state][n_calc_nodes]:
+                    res_dict[rand_state][n_calc_nodes][max_orders] = {}
+
                 regressor = dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
                 for problem in task_dict:
-                    res_dict[rand_state][n_calc_nodes][max_orders][problem] = {}
-                    print('####################')
-                    print(f'# Random State: {rand_state}, Nodes: {n_calc_nodes}, Orders: {max_orders}, Problem: {problem}')
-                    print('####################')
+                    if problem not in res_dict[rand_state][n_calc_nodes][max_orders]:
+                        res_dict[rand_state][n_calc_nodes][max_orders][problem] = {}
+                        print('####################')
+                        print(f'# Random State: {rand_state}, Nodes: {n_calc_nodes}, Orders: {max_orders}, Problem: {problem}')
+                        print('####################')
 
-                    X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
+                        X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
 
-                    all_rec = []
-                    all_expr = []
-                    all_times = []
+                        all_rec = []
+                        all_expr = []
+                        all_times = []
 
 
-                    for idx in range(y.shape[1]):
-                        expr_true = exprs_true[idx]
-                        y_part = y[:, idx]
+                        for idx in range(y.shape[1]):
+                            expr_true = exprs_true[idx]
+                            y_part = y[:, idx]
 
-                        s_time = timer()
-                        regressor.fit(X, y_part)
-                        e_time = timer()
-                        all_times.append(e_time - s_time)
+                            s_time = timer()
+                            regressor.fit(X, y_part)
+                            e_time = timer()
+                            all_times.append(e_time - s_time)
 
-                        expr_est = regressor.model()
-                        all_expr.append(expr_est)
-                        rec = utils.symb_eq(expr_est, expr_true) 
-                        all_rec.append(rec)
+                            expr_est = regressor.model()
+                            all_expr.append(expr_est)
+                            rec = utils.symb_eq(expr_est, expr_true) 
+                            all_rec.append(rec)
 
-    
-                    res_dict[rand_state][n_calc_nodes][max_orders][problem] = {
-                        'recovery' : all_rec,
-                        'exprs' : all_expr,
-                        'times' : all_times
-                    }   
-                    with open(save_path, 'wb') as handle:
-                        pickle.dump(res_dict, handle) 
+        
+                        res_dict[rand_state][n_calc_nodes][max_orders][problem] = {
+                            'recovery' : all_rec,
+                            'exprs' : all_expr,
+                            'times' : all_times
+                        }   
+                        with open(save_path, 'wb') as handle:
+                            pickle.dump(res_dict, handle) 
+
+def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 10000):
+    np.random.seed(0)
+    # Problem
+    load_path = f'datasets/{ds_name}/tasks.p'
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    save_path = f'results/{ds_name}/covariances.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
+
+
+    problems = list(task_dict.keys())
+    results_dict = {}
+    for problem in problems:
+        X = task_dict[problem]['X']
+        y = task_dict[problem]['y']
+        exprs = task_dict[problem]['expr']
+        
+        for part_idx in range(y.shape[1]):
+            print('####################')
+            print(f'{problem}_{part_idx}')
+            print('####################')
+            
+            y_part = y[:, part_idx]
+            target_expr = exprs[part_idx]
+            
+            
+            # get traits of target
+            target_traits = utils.get_subexprs_sympy(target_expr)[1:]
+            sort_idx = np.argsort([-utils.tree_size(expr) for expr in target_traits])
+            target_traits = [target_traits[i] for i in sort_idx]
+            target_traits = list(set([str(expr) for expr in target_traits]))
+            
+            
+            # sample population
+            loss_fkt = dag_search.MSE_loss_fkt(y_part.reshape(-1, 1))
+
+            population = []
+            losses = []
+            try_counter = 0
+            while (len(population) < n_graphs) and (try_counter < max_tries): 
+                graph = dag_search.sample_graph(m = X.shape[1], n = 1, k = 1, n_calc_nodes = 3)
+                c, loss = dag_search.evaluate_cgraph(graph, X, loss_fkt, opt_mode = 'grid_zoom')
+                if loss < 1000:
+                    population.append(graph.evaluate_symbolic(c = c)[0])
+                    losses.append(loss)
+                    try_counter = 0
+                else:
+                    try_counter += 1
+
+            if len(population) > 2:  
+                fitnesses = -np.array(losses)
+
+                sort_idx = np.argsort(fitnesses)
+                population = [population[i] for i in sort_idx]
+                fitnesses = fitnesses[sort_idx]
+
+                all_idxs = np.arange(len(population))
+                subset_idxs = []
+                for i in range(500): 
+                    np.random.shuffle(all_idxs)
+                    sub_idxs = all_idxs[:100].copy()
+                    subset_idxs.append(sub_idxs)
+                subset_idxs = np.row_stack(subset_idxs)
+
+
+                covs = []
+                all_scores = []
+                all_occs = []
+                for trait in tqdm(target_traits):
+                    scores = []
+                    occurences = []
+                    for sub_idxs in subset_idxs:
+                        sub_population = [population[i] for i in sub_idxs]
+                        sub_fitnesses = np.array(fitnesses)[sub_idxs]
+                        scores.append(np.mean(sub_fitnesses))
+                        occurences.append(utils.expr_occurence(trait, sub_population))
+
+                    covariance = np.cov(np.row_stack([scores, occurences]))[0, 1]
+                    covs.append(covariance)
+                    all_scores.append(np.array(scores))
+                    all_occs.append(np.array(occurences))
+                    
+                
+                results_dict[f'{problem}_{part_idx}'] = {
+                    'covariances' : covs,
+                    'scores' : all_scores,
+                    'occurences' : all_occs
+                }
+
+                with open(save_path, 'wb') as handle:
+                    pickle.dump(results_dict, handle) 
 
 
 
 if __name__ == '__main__':
+
+    # Covariance experiment
+    if False:
+        covariance_experiment('Strogatz')
+        covariance_experiment('Nguyen')
+        covariance_experiment('Univ')
+        covariance_experiment('Feynman')
 
     # Scaling experiment
     if True:
