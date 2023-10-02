@@ -82,6 +82,7 @@ class MSE_loss_fkt(DAG_Loss_fkt):
         # consider not using inf, since optimizers struggle with this
         losses[invalid] = 1000
         losses[losses > 1000] = 1000
+        losses[losses < 0] = 1000
 
         if not vec:
             return losses[0]
