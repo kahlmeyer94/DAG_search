@@ -1149,7 +1149,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt : DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt : 'mse', **kwargs):
 
         '''
         @Params:
@@ -1177,7 +1177,11 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.cgraph = None
         self.consts = None
         self.random_state = random_state
-        self.loss_fkt = loss_fkt
+
+        if loss_fkt == 'mse':
+            self.loss_fkt = MSE_loss_fkt
+        else:
+            self.loss_fkt = R2_loss_fkt
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
