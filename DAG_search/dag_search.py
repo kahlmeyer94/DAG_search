@@ -1149,7 +1149,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt : 'mse', **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :str = 'mse', **kwargs):
 
         '''
         @Params:
