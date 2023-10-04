@@ -1231,7 +1231,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         # optimizing constants of top DAGs
         if verbose > 0:
             print('Optimizing best constants')
-        loss_fkt = self.loss_fkt(y_part)
+        loss_fkt = self.loss_fkt(y)
         losses = []
         consts = []
         for graph, c in zip(res['graphs'], res['consts']):
