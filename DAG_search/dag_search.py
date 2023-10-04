@@ -1149,7 +1149,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt : DAG_Loss_fkt = MSE_loss_fkt **kwargs):
 
         '''
         @Params:
@@ -1160,6 +1160,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             processes... number of processes for multiprocessing
             max_samples... maximum number of samples on which to fit
             mode... one of 'exhaustive' or 'hierarchical'
+            loss_fkt... loss function class
         '''
         self.k = k
         self.n_calc_nodes = n_calc_nodes
@@ -1176,6 +1177,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.cgraph = None
         self.consts = None
         self.random_state = random_state
+        self.loss_fkt = loss_fkt
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
@@ -1203,8 +1205,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         y_part = y_sub.reshape(-1, 1)
         m = X_sub.shape[1]
         n = 1
-        #loss_fkt = MSE_loss_fkt(y_part)
-        loss_fkt = R2_loss_fkt(y_part)
+        loss_fkt = self.loss_fkt(y_part)
         params = {
             'X' : X_sub,
             'n_outps' : n,
@@ -1226,7 +1227,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         # optimizing constants of top DAGs
         if verbose > 0:
             print('Optimizing best constants')
-        loss_fkt = MSE_loss_fkt(y)
+        loss_fkt = self.loss_fkt(y_part)
         losses = []
         consts = []
         for graph, c in zip(res['graphs'], res['consts']):
