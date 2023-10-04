@@ -234,7 +234,7 @@ def symb_eq(expr_est, expr_true) -> bool:
                 if str(s_est) == str(s_true):
                     transl_dict[s_true] = s_est
         expr_true_tmp = expr_true.subs(transl_dict)
-        expr_est_tmp = round_floats(expr_est)
+        expr_est_tmp = round_floats(simplify(expr_est))
 
         # If expression is absurdly large: do not try
         if tree_size(expr_est_tmp) > 50:
