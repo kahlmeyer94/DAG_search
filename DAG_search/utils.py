@@ -275,7 +275,7 @@ def round_floats(ex1, max_v:int = 1000):
         sympy expression
     '''
 
-    ex2 = ex1
+    ex2 = ex1.evalf()
     found = True
     max_rounds = 3
     n_rounds = 0
