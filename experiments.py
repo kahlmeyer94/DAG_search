@@ -666,7 +666,7 @@ def oscillation_experiment():
 
 if __name__ == '__main__':
 
-    if True:
+    if False:
         oscillation_experiment()
 
     # Covariance experiment
@@ -677,7 +677,7 @@ if __name__ == '__main__':
         covariance_experiment('Feynman')
 
     # Scaling experiment
-    if False:
+    if True:
         scaling_experiment('Strogatz')
         scaling_experiment('Nguyen')
         scaling_experiment('Univ')
