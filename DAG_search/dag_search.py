@@ -22,8 +22,8 @@ class DAG_Loss_fkt(object):
     '''
     Abstract class for Loss function
     '''
-    def __init__(self):
-        pass
+    def __init__(self, opt_const:bool = True):
+        self.opt_const = opt_const
         
     def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
         '''
@@ -47,6 +47,7 @@ class MSE_loss_fkt(DAG_Loss_fkt):
         @Params:
             outp... output that DAG should match (N x n)
         '''
+        super().__init__()
         self.outp = outp
         
     def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
@@ -98,6 +99,7 @@ class R2_loss_fkt(DAG_Loss_fkt):
         @Params:
             outp... output that DAG should match (N x n)
         '''
+        super().__init__()
         self.outp = outp
         
     def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
@@ -518,6 +520,10 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
         # we are in parallel mode
         global stop_var
         evaluate = not bool(stop_var)
+
+
+    if not loss_fkt.opt_const:
+        return [], loss_fkt(X, cgraph, [])
 
     if evaluate:
 
