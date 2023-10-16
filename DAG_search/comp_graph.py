@@ -181,22 +181,23 @@ class CompGraph():
 
     # Evaluation
     
-    def get_gradient(self, X, c):
+    def evaluate_pytorch(self, X, c):
+        '''
+        Here X and c need to be torch tensors
+        c is 2D
+        '''
+
         N = X.shape[0]
         k = self.inp_dim + self.n_consts
 
         grad_dict = {i : None for i in self.node_dict}
-        X_tensor = torch.tensor(X, requires_grad = True).double()
-
-        c_tensor = (torch.ones((N, len(c))) * torch.tensor(c)).double()
-        c_tensor.requires_grad = True
 
         # inputs        
         for i in range(self.inp_dim):
-            grad_dict[i] = X_tensor[:, i]
+            grad_dict[i] = X[:, i]
 
         for i in range(self.n_consts):
-            grad_dict[i + self.inp_dim] = c_tensor[:, i]
+            grad_dict[i + self.inp_dim] = c[:, i]
 
         # others
         for i in self.eval_order[k:]:
@@ -208,13 +209,25 @@ class CompGraph():
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 if child_results_pt.shape[0] > 1:
-                    grad_result = node_op_pt(child_results_pt, axis=0)
+                    grad_result = node_op_pt(grad_dict[children[0]], grad_dict[children[1]])
                 else:
                     grad_result = node_op_pt(child_results_pt[0])
                 grad_dict[i] = grad_result
 
 
         h_X = torch.column_stack([grad_dict[i] for i in self.outp_nodes])
+        return h_X
+
+    def get_gradient(self, X, c):
+        N = X.shape[0]
+        k = self.inp_dim + self.n_consts
+
+        grad_dict = {i : None for i in self.node_dict}
+        X_tensor = torch.tensor(X, requires_grad = True).double()
+        c_tensor = (torch.ones((N, len(c))) * torch.as_tensor(c)).double()
+        c_tensor.requires_grad = True
+        
+        h_X = self.evaluate_pytorch(X_tensor, c)
 
         if h_X.requires_grad:
             # shape: outps x N x inps
