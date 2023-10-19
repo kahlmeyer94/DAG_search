@@ -698,7 +698,7 @@ if __name__ == '__main__':
         fdc_experiment('Univ')
 
     # recovery experiment
-    if False:
+    if True:
         overwrite = False
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
@@ -711,6 +711,7 @@ if __name__ == '__main__':
             'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             'dsr' : (regressors.DSR(), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True), 
+            'DAGSearch_Simpl' : (dag_search.SimplificationRegressor(random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
