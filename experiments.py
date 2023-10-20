@@ -677,7 +677,7 @@ if __name__ == '__main__':
         covariance_experiment('Feynman')
 
     # Scaling experiment
-    if True:
+    if False:
         scaling_experiment('Strogatz')
         scaling_experiment('Nguyen')
         scaling_experiment('Univ')
@@ -699,19 +699,21 @@ if __name__ == '__main__':
 
     # recovery experiment
     if True:
-        overwrite = False
+        overwrite = True
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
+        regr_symb = dag_search.DAGRegressor(processes = 10, random_state = rand_state)
+        regr_blackbox = regressors.PolyReg(degree = 3)
         regs = {
-            'linreg' : (regressors.LinReg(), True),
-            'polyreg2' : (regressors.PolyReg(degree= 2), True),
-            'polyreg3' : (regressors.PolyReg(degree= 3), True),
-            'MLP' : (regressors.MLP(random_state = rand_state), False),
-            'operon' : (regressors.Operon(random_state = rand_state), True),
-            'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
-            'dsr' : (regressors.DSR(), True),
-            'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True), 
-            'DAGSearch_Simpl' : (dag_search.SimplificationRegressor(random_state = rand_state), True), 
+            #'linreg' : (regressors.LinReg(), True),
+            #'polyreg2' : (regressors.PolyReg(degree= 2), True),
+            #'polyreg3' : (regressors.PolyReg(degree= 3), True),
+            #'MLP' : (regressors.MLP(random_state = rand_state), False),
+            #'operon' : (regressors.Operon(random_state = rand_state), True),
+            #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
+            #'dsr' : (regressors.DSR(), True),
+            #'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True), 
+            'DAGSearch_Simpl' : (dag_search.SimplificationRegressor(regr_search = regr_symb, regr_blackbox = regr_blackbox,random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:

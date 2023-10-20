@@ -158,7 +158,7 @@ class R2_loss_fkt(DAG_Loss_fkt):
             return losses
 
 class Simplification_loss_fkt(DAG_Loss_fkt):
-    def __init__(self, regr, y):
+    def __init__(self, regr, y, test_perc = 0.2):
         '''
         Loss function for finding DAG for regression task.
 
@@ -170,6 +170,16 @@ class Simplification_loss_fkt(DAG_Loss_fkt):
         self.opt_const = False
         self.regr = regr
         self.y = y
+        
+        self.test_perc = test_perc
+        self.test_amount = int(self.test_perc*len(y))
+        assert self.test_amount > 0, f'Too little data for test share of {self.test_perc}'
+        all_idxs = np.arange(len(self.y))
+        np.random.shuffle(all_idxs)
+        self.test_idxs = all_idxs[:self.test_amount]
+        self.train_idxs = all_idxs[self.test_amount:]
+
+
         
     def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
         '''
@@ -183,8 +193,6 @@ class Simplification_loss_fkt(DAG_Loss_fkt):
         @Returns:
             1 - R2 if we use graph as dimensionality reduction
         '''
-
-        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             
@@ -196,9 +204,9 @@ class Simplification_loss_fkt(DAG_Loss_fkt):
                 X_new = np.column_stack([X_new] + [X[:, i] for i in range(X.shape[1]) if i not in used_idxs])
 
                 if np.all(np.isreal(X_new) & np.isfinite(X_new) & (np.abs(X_new) < 1000)): 
-                    self.regr.fit(X_new, self.y)
-                    pred = self.regr.predict(X_new)
-                    loss = 1 - r2_score(self.y, pred)
+                    self.regr.fit(X_new[self.train_idxs], self.y[self.train_idxs])
+                    pred = self.regr.predict(X_new[self.test_idxs])
+                    loss = 1 - r2_score(self.y[self.test_idxs], pred)
                 else:
                     loss = np.inf
             else:
@@ -1414,11 +1422,11 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
                     'n_outps' : 1,
                     'loss_fkt' : loss_fkt_simpl,
                     'k' : 0,
-                    'n_calc_nodes' : 1,
+                    'n_calc_nodes' : 2,
                     'n_processes' : 1,
                     'topk' : 1,
                     'verbose' : verbose,
-                    'max_orders' : 1000, 
+                    'max_orders' : 10000, 
                     'stop_thresh' : 1e-10
                 }
                 res = exhaustive_search(**params)
