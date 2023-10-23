@@ -1422,7 +1422,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
                     'n_outps' : 1,
                     'loss_fkt' : loss_fkt_simpl,
                     'k' : 0,
-                    'n_calc_nodes' : 2,
+                    'n_calc_nodes' : 1,
                     'n_processes' : 1,
                     'topk' : 1,
                     'verbose' : verbose,
