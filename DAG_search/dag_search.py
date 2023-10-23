@@ -1218,7 +1218,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = None, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = 1, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1237,10 +1237,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         assert mode in ['exhaustive', 'hierarchical'], f'Search mode {mode} is not supported.'
         self.mode = mode
 
-        if processes is None:
-            self.processes = multiprocessing.cpu_count()//2
-        else:
-            self.processes = max(min(processes, multiprocessing.cpu_count()), 1)
+        self.processes = max(min(processes, multiprocessing.cpu_count()), 1)
 
         self.random_state = random_state
         self.loss_fkt = loss_fkt
