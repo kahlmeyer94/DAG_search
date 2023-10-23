@@ -19,6 +19,7 @@ from sklearn.preprocessing import PolynomialFeatures
 
 from DAG_search import config
 from DAG_search import comp_graph
+from DAG_search import utils
 
 ########################
 # Loss Functions + Optimizing constants
@@ -1531,6 +1532,13 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
             self.exec_func = sympy.lambdify(x_symbs, self.expr)
             
         return self.exec_func(*[X[:, i] for i in range(X.shape[1])])
+
+    def complexity(self):
+        '''
+        Complexity of expression (number of calculations)
+        '''
+        assert hasattr(self, 'expr')
+        return utils.tree_size(self.expr)
 
     def model(self):
         '''
