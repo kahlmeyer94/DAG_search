@@ -14,9 +14,11 @@ import multiprocessing
 from copy import deepcopy
 import sklearn
 
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+
 from DAG_search import config
 from DAG_search import comp_graph
-from regressors import regressors
 
 ########################
 # Loss Functions + Optimizing constants
@@ -1343,6 +1345,54 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         return self.cgraph.n_operations()
     
 
+
+class PolyReg():
+    '''
+    Regressor based on Polynomial Regression
+    '''
+    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
+        self.degree = degree
+        self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
+        self.regr = LinearRegression()
+        self.X = None
+        self.y = None
+        
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        X_poly = self.poly.fit_transform(self.X)
+        self.regr.fit(X_poly, self.y)
+
+    def predict(self, X):
+        assert self.X is not None
+        X_poly = self.poly.fit_transform(X)
+        pred = self.regr.predict(X_poly)
+        return pred
+
+    def model(self):
+        assert self.X is not None
+        names = [sympy.symbols(f'x_{i}', real = True) for i in range(self.X.shape[1])]
+
+        X_idxs = np.arange(self.X.shape[1])
+        X_poly = []
+        for degree in range(1, self.degree+1):   
+            poly_idxs = itertools.combinations_with_replacement(X_idxs, degree)
+            for idxs in poly_idxs:
+                prod = 1
+                for i in idxs:
+                    prod = prod*names[i]
+                X_poly.append(prod)
+
+        expr = self.regr.intercept_
+        for x_name, alpha in zip(X_poly, self.regr.coef_):
+            expr += alpha*x_name
+        return expr
+
 class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
@@ -1355,7 +1405,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
         if regr_search is None:
             regr_search = DAGRegressor(random_state = random_state)
         if regr_blackbox is None:
-            regr_blackbox = regressors.PolyReg(degree = 3)
+            regr_blackbox = PolyReg(degree = 3)
         self.regr_search = regr_search
         self.regr_blackbox = regr_blackbox
         self.verbose = verbose
