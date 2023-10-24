@@ -232,6 +232,7 @@ class Sub_loss_fkt(DAG_Loss_fkt):
         self.regr = regr
         self.y = y
         self.regr.fit(X, y)
+        self.approx_error = np.mean((self.regr.predict(X) - y)**2)
         self.df_dx = utils.est_gradient(self.regr, X)
 
 
@@ -273,7 +274,7 @@ class Sub_loss_fkt(DAG_Loss_fkt):
                     rhs = (dz_dx[:, used_idxs].T * df_dz).T
                     lhs = self.df_dx[:, used_idxs]
 
-                    loss = np.mean((rhs - lhs)**2)
+                    loss = np.max(np.abs(rhs - lhs))
 
                 else:
                     loss = np.inf
@@ -1270,7 +1271,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 
     return ret
 
-def simpl_preprocessing(X, y, regr_bb, verbose = 2, loss_thresh = 1e-10):
+def simpl_preprocessing(X, y, regr_bb, verbose = 2, loss_thresh = 1e-2, processes = 1):
     X_current = X.copy()
     
     var_dict = {f'x_{i}' : f'z_{i}' for i in range(X.shape[1])}
@@ -1286,7 +1287,7 @@ def simpl_preprocessing(X, y, regr_bb, verbose = 2, loss_thresh = 1e-10):
                 'loss_fkt' : loss_fkt_simpl,
                 'k' : 0,
                 'n_calc_nodes' : 2,
-                'n_processes' : 1,
+                'n_processes' : processes,
                 'topk' : 1,
                 'verbose' : verbose,
                 'max_orders' : 10000, 
@@ -1513,7 +1514,7 @@ class PolyReg():
             expr += alpha*x_name
         return expr
 
-class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
 
@@ -1532,7 +1533,6 @@ class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.Regres
         self.simpl_nodes = simpl_nodes
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
-        loss_fkt_simpl = Simplification_loss_fkt(self.regr_blackbox, y)
 
         
         var_dict = {f'x_{i}' : f'z_{i}' for i in range(X.shape[1])}
@@ -1545,6 +1545,7 @@ class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.Regres
         
         
         while not done:
+            
             if verbose > 0:
                 print('Variable Dictionary')
                 for s in var_dict:
@@ -1587,6 +1588,8 @@ class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.Regres
                 if verbose > 0:
                     print('Not done, searching for Substitution...')
                 
+                
+                loss_fkt_simpl = Sub_loss_fkt(self.regr_blackbox, X_tmp, y)
                 params = {
                     'X' : X_tmp,
                     'n_outps' : 1,
@@ -1671,7 +1674,7 @@ class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.Regres
 
         return self.expr
     
-class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
 
@@ -1683,15 +1686,20 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
         if regr_search is None:
             regr_search = DAGRegressor(random_state = random_state)
         if regr_blackbox is None:
-            regr_blackbox = PolyReg(degree = 5)
+            regr_blackbox = PolyReg(degree = 4)
         self.regr_search = regr_search
         self.regr_blackbox = regr_blackbox
         self.verbose = verbose
         self.simpl_nodes = simpl_nodes
 
-    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
-
-        X_simpl, var_dict = simpl_preprocessing(X, y, self.regr_blackbox, verbose = verbose)
+    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0, processes:int = 1):
+        
+        if verbose > 0:
+            print('Searching for Simplifications')
+        X_simpl, var_dict = simpl_preprocessing(X, y, self.regr_blackbox, verbose = verbose, processes=processes)
+        
+        if verbose > 0:
+            print('Searching for Expression')
         self.regr_search.fit(X_simpl, y, verbose = verbose)
 
 

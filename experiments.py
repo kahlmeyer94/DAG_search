@@ -703,7 +703,7 @@ if __name__ == '__main__':
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         regr_symb = dag_search.DAGRegressor(processes = 10, random_state = rand_state)
-        regr_blackbox = regressors.PolyReg(degree = 3)
+        regr_blackbox = regressors.PolyReg(degree = 4)
         regs = {
             #'linreg' : (regressors.LinReg(), True),
             #'polyreg2' : (regressors.PolyReg(degree= 2), True),
