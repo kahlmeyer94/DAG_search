@@ -1521,7 +1521,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
     Sklearn interface for symbolic Regressor based on simplification strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, verbose:int = 0, simpl_nodes:int = 2):
+    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 1, n_processes:int = 1):
         self.random_state = random_state
         if regr_search is None:
             regr_search = DAGRegressor(random_state = random_state)
@@ -1529,11 +1529,11 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
             regr_blackbox = PolyReg(degree = 5)
         self.regr_search = regr_search
         self.regr_blackbox = regr_blackbox
-        self.verbose = verbose
         self.simpl_nodes = simpl_nodes
+        self.n_processes = n_processes
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
-
+        
         
         var_dict = {f'x_{i}' : f'z_{i}' for i in range(X.shape[1])}
         done = False
@@ -1596,7 +1596,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
                     'loss_fkt' : loss_fkt_simpl,
                     'k' : 0,
                     'n_calc_nodes' : 1,
-                    'n_processes' : 1,
+                    'n_processes' : self.n_processes,
                     'topk' : 1,
                     'verbose' : verbose,
                     'max_orders' : 10000, 
@@ -1674,7 +1674,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
 
         return self.expr
     
-class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class SimplificationRegressorNew(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
 

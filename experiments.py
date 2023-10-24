@@ -702,7 +702,7 @@ if __name__ == '__main__':
         overwrite = True
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        regr_symb = dag_search.DAGRegressor(processes = 10, random_state = rand_state)
+        regr_symb = dag_search.DAGRegressor(processes = 10, n_calc_nodes = 3, max_orders = int(1e4), random_state = rand_state)
         regr_blackbox = regressors.PolyReg(degree = 4)
         regs = {
             #'linreg' : (regressors.LinReg(), True),
@@ -713,7 +713,7 @@ if __name__ == '__main__':
             #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
             #'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True), 
-            'DAGSearch_Simpl' : (dag_search.SimplificationRegressor(regr_search = regr_symb, regr_blackbox = regr_blackbox,random_state = rand_state), True), 
+            'DAGSearch_Simpl' : (dag_search.SimplificationRegressor(regr_search = regr_symb, regr_blackbox = regr_blackbox,random_state = rand_state, n_processes = 10), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
