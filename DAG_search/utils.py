@@ -9,6 +9,39 @@ import warnings
 import networkx as nx
 
 #####################################
+# Gradient estimation
+#####################################
+
+def est_gradient(reg, X):
+    
+    eps = 1e-5
+    X_tmp = []
+    for i in range(X.shape[1]):
+        x_tmp = X.copy()
+        x_tmp[:, i] += eps
+        X_tmp.append(x_tmp)
+        x_tmp = X.copy()
+        x_tmp[:, i] -= eps
+        X_tmp.append(x_tmp)
+    X_tmp = np.concatenate(X_tmp, axis=0)
+
+    grad_X = reg.predict(X_tmp)
+    val_X = reg.predict(X)
+
+    N = len(X)
+    f_ = []
+    for i in range(X_tmp.shape[1]):
+        f_h_pos = grad_X[i*2*N : i*2*N + N]
+        f_h_neg = grad_X[i*2*N + N : (i+1)*2*N]
+
+        v1 = (f_h_pos - val_X)/eps
+        v2 = (val_X - f_h_neg)/eps
+        v = 0.5*(v1 + v2)
+        f_.append(v)
+    f_ = np.column_stack(f_)
+    return f_
+
+#####################################
 # Locality
 #####################################
 
