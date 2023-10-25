@@ -218,7 +218,7 @@ class Simplification_loss_fkt(DAG_Loss_fkt):
         return loss
 
 class Sub_loss_fkt(DAG_Loss_fkt):
-    def __init__(self, regr, X, y):
+    def __init__(self, regr, X, y, max_samples:int = None):
         '''
         Loss function for finding a good substitution.
 
@@ -226,17 +226,24 @@ class Sub_loss_fkt(DAG_Loss_fkt):
             regr... regressor to estimate gradients
             X... input of regression problem (N x m)
             y... output of regression problem (N)
+            max_samples... maximum samples for estimating gradient
         '''
         super().__init__()
+
         self.opt_const = False
         self.regr = regr
         self.y = y
         self.regr.fit(X, y)
         self.approx_error = np.mean((self.regr.predict(X) - y)**2)
-        self.df_dx = utils.est_gradient(self.regr, X)
 
+        self.max_samples = max_samples
+        self.take_idxs = np.arange(len(self.y))
+        if self.max_samples < len(self.y):
+            np.random.shuffle(self.take_idxs)
+            self.take_idxs = self.take_idxs[:self.max_samples]
 
-
+        self.df_dx = utils.est_gradient(self.regr, X[self.take_idxs])
+        
         
     def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
         '''
@@ -257,18 +264,17 @@ class Sub_loss_fkt(DAG_Loss_fkt):
             used_idxs = sorted([int(str(e).split('_')[-1]) for e in expr.free_symbols])
             
             if len(used_idxs) > 1:
-                X_new = cgraph.evaluate(X, np.array([]))
+                X_new, grad_new = cgraph.evaluate(X, np.array([]), return_grad = True)
                 X_new = np.column_stack([X_new] + [X[:, i] for i in range(X.shape[1]) if i not in used_idxs])
 
                 if np.all(np.isreal(X_new) & np.isfinite(X_new) & (np.abs(X_new) < 1000)): 
                     # gradient of substitution
-                    X_new, grad_new = cgraph.evaluate(X, np.array([]), return_grad = True)
-                    X_new = np.column_stack([X_new] + [X[:, i] for i in range(X.shape[1]) if i not in used_idxs])
-                    dz_dx = grad_new[0]
+                    dz_dx = grad_new[0][self.take_idxs]
 
                     # gradient of new regression problem
-                    self.regr.fit(X_new, self.y)
-                    df_dz = utils.est_gradient(self.regr, X_new)[:, 0]
+                    self.regr.fit(X_new, self.y) # fit on all
+
+                    df_dz = utils.est_gradient(self.regr, X_new[self.take_idxs])[:, 0]
 
                     # condition
                     rhs = (dz_dx[:, used_idxs].T * df_dz).T
@@ -1271,6 +1277,43 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 
     return ret
 
+
+def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 2, verbose:int = 2, loss_thresh:float = 1e-10, n_processes:int = 1, max_samples:int = 100, mode:str = 'gradient', topk:int = 10) -> comp_graph.CompGraph:
+    # 1. find best substitution on subset
+
+    if mode == 'gradient':
+        loss_fkt_simpl = Sub_loss_fkt(regr_bb, X, y, max_samples=max_samples)
+    else:
+        loss_fkt_simpl = Simplification_loss_fkt(regr_bb, y)
+
+    params = {
+        'X' : X,
+        'n_outps' : 1,
+        'loss_fkt' : loss_fkt_simpl,
+        'k' : 0,
+        'n_calc_nodes' : n_calc_nodes,
+        'n_processes' : n_processes,
+        'topk' : topk,
+        'verbose' : verbose,
+        'max_orders' : 10000, 
+        'stop_thresh' : loss_thresh
+    }
+    res = exhaustive_search(**params)
+
+    if mode == 'gradient':
+        # 2. from top substitutions, get best one on all samples
+
+        loss_fkt_simpl = Sub_loss_fkt(regr_bb, X, y, max_samples=len(X))
+        sub_losses = []
+        for cgraph in res['graphs']:
+            loss = loss_fkt_simpl(X, cgraph, [])
+            sub_losses.append(loss)
+
+        sort_idx = np.argsort(sub_losses)
+        return [res['graphs'][i] for i in sort_idx], [res['losses'][i] for i in sort_idx]
+    else:
+        return res['graphs'], res['losses']
+
 def simpl_preprocessing(X, y, regr_bb, verbose = 2, loss_thresh = 1e-2, processes = 1):
     X_current = X.copy()
     
@@ -1521,7 +1564,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
     Sklearn interface for symbolic Regressor based on simplification strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 1, n_processes:int = 1):
+    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 1, n_processes:int = 1, mode:str = 'gradient'):
         self.random_state = random_state
         if regr_search is None:
             regr_search = DAGRegressor(random_state = random_state)
@@ -1531,6 +1574,8 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
         self.regr_blackbox = regr_blackbox
         self.simpl_nodes = simpl_nodes
         self.n_processes = n_processes
+        assert mode in ['gradient', 'fit']
+        self.mode = mode
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         
@@ -1553,7 +1598,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
             
             
                 
-            # 1. try to solve with Brute Force
+            # 1. try to solve with symbolic regressor
             if verbose > 0:
                 print('Trying to solve...')
             self.regr_search.fit(X_tmp, y, verbose = verbose)
@@ -1586,29 +1631,13 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
             if not done:
                 # 5. Find Substitution
                 if verbose > 0:
-                    print('Not done, searching for Substitution...')
-                
-                
-                loss_fkt_simpl = Sub_loss_fkt(self.regr_blackbox, X_tmp, y)
-                params = {
-                    'X' : X_tmp,
-                    'n_outps' : 1,
-                    'loss_fkt' : loss_fkt_simpl,
-                    'k' : 0,
-                    'n_calc_nodes' : 1,
-                    'n_processes' : self.n_processes,
-                    'topk' : 1,
-                    'verbose' : verbose,
-                    'max_orders' : 10000, 
-                    'stop_thresh' : 1e-10
-                }
-                res = exhaustive_search(**params)
-                
-                # 6. Substitute
+                    print('Not done, searching for Substitution...') 
+                cgraphs, sub_r2s = find_substitutions(X_tmp, y, self.regr_blackbox, verbose = verbose, n_processes=self.n_processes, mode = self.mode)
 
-                cgraph = res['graphs'][0]
+                # 6. Substitute
+                cgraph = cgraphs[0]
+                sub_r2 = sub_r2s[0]
                 sub_expr = cgraph.evaluate_symbolic()[0]
-                sub_r2 = res['losses'][0]
 
                 
                 used_idxs = sorted([int(str(e).split('_')[-1]) for e in sub_expr.free_symbols])
