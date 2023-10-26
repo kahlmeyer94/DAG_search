@@ -280,7 +280,7 @@ class Sub_loss_fkt(DAG_Loss_fkt):
                     rhs = (dz_dx[:, used_idxs].T * df_dz).T
                     lhs = self.df_dx[:, used_idxs]
 
-                    loss = np.max(np.abs(rhs - lhs))
+                    loss = np.median(np.abs(rhs - lhs))
 
                 else:
                     loss = np.inf
@@ -1314,65 +1314,102 @@ def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 2
     else:
         return res['graphs'], res['losses']
 
-def simpl_preprocessing(X, y, regr_bb, verbose = 2, loss_thresh = 1e-2, processes = 1):
-    X_current = X.copy()
-    
+def simpl_preprocessing(X, y, regr_bb, verbose = 2, beamsize:int = 2, topk:int = 10, mode:str = 'fit', loss_thresh = 1e-2, processes = 1, random_state:int = 0):
+    np.random.seed(random_state)
+
+    # beam consists of tuples (data, translation)
+
     var_dict = {f'x_{i}' : f'z_{i}' for i in range(X.shape[1])}
+    orig_tuple = (X, var_dict)
 
+    final_beam = []
+    unique_dicts = set()
+
+    current_beam = [orig_tuple]
+    new_beam = []
     done = False
+
+
+
     while not done:
-        if X_current.shape[1] > 1:
-            # search for best substitution
-            loss_fkt_simpl = Sub_loss_fkt(regr_bb, X_current, y)
-            params = {
-                'X' : X_current,
-                'n_outps' : 1,
-                'loss_fkt' : loss_fkt_simpl,
-                'k' : 0,
-                'n_calc_nodes' : 2,
-                'n_processes' : processes,
-                'topk' : 1,
-                'verbose' : verbose,
-                'max_orders' : 10000, 
-                'stop_thresh' : loss_thresh
-            }
-            res = exhaustive_search(**params)
+        
+        if verbose > 0:
+            print('##############')
+            print(f'# Evaluating Beam of Size {len(current_beam)}')
+            print('##############')
+            
+        
+            
+        for X_current, var_dict in current_beam:
+            dict_tuple = tuple([var_dict[f'x_{i}'] for i in range(len(var_dict))])
+            if dict_tuple not in unique_dicts:
+                unique_dicts.add(dict_tuple)
+                final_beam.append((X_current, var_dict))
+            
+            
+            if X_current.shape[1] > 1:
+                if verbose > 0:
+                    print(f'Searching for Simplification of')
+                    for s in var_dict:
+                        print(f'{s} -> {var_dict[s]}')
+                
+                
+                graphs, losses = find_substitutions(X_current, y, regr_bb, n_calc_nodes = 1, verbose = verbose, mode = mode, topk=beamsize)
+
+                if np.any(np.array(losses) <= loss_thresh):
+                    for graph, loss in zip(graphs, losses):
+                        if loss <= loss_thresh:
+                            # carry out substitution
+                            sub_expr = graph.evaluate_symbolic()[0]
+                            sub_loss = loss
+                            if verbose > 0:
+                                print(f'Substitution: {sub_expr}\tLoss: {sub_loss}')
 
 
-            cgraph = res['graphs'][0]
-            sub_expr = cgraph.evaluate_symbolic()[0]
-            sub_loss = res['losses'][0]
 
-            if verbose > 0:
-                print(f'Substitution: {sub_expr}\tGradient Loss: {sub_loss}')
+                            # substitute
+                            used_idxs = sorted([int(str(e).split('_')[-1]) for e in sub_expr.free_symbols])
+                            X_new = graph.evaluate(X_current, np.array([]))
+                            X_new = np.column_stack([X_new] + [X_current[:, i] for i in range(X_current.shape[1]) if i not in used_idxs])
 
-            if sub_loss > loss_thresh:
-                # we cannot simplify further
-                done = True
-            else:
-                # substitute
-                used_idxs = sorted([int(str(e).split('_')[-1]) for e in sub_expr.free_symbols])
-                X_new = cgraph.evaluate(X_current, np.array([]))
-                X_new = np.column_stack([X_new] + [X_current[:, i] for i in range(X_current.shape[1]) if i not in used_idxs])
+                            sub_expr = str(sub_expr)
+                            sub_expr_raw = sub_expr
+                            for i in range(X_current.shape[1]-1 , -1, -1):
+                                s = f'x_{i}'
+                                sub_expr = sub_expr.replace(s, f'({var_dict[s]})')
 
-                sub_expr = str(sub_expr)
-                sub_expr_raw = sub_expr
-                for i in range(X_current.shape[1]-1 , -1, -1):
-                    s = f'x_{i}'
-                    sub_expr = sub_expr.replace(s, f'({var_dict[s]})')
+                            new_var_dict = {f'x_0' : sub_expr}
+                            for i in range(X_current.shape[1]):
+                                if i not in used_idxs:
+                                    s_new = f'x_{len(new_var_dict)}'
+                                    s_old = f'x_{i}'
+                                    new_var_dict[s_new] = var_dict[s_old]
 
-                new_var_dict = {f'x_0' : sub_expr}
-                for i in range(X_current.shape[1]):
-                    if i not in used_idxs:
-                        s_new = f'x_{len(new_var_dict)}'
-                        s_old = f'x_{i}'
-                        new_var_dict[s_new] = var_dict[s_old]
-                X_current = X_new
-                var_dict = new_var_dict
-        else:
-            done = True
-    
-    return X_current, var_dict
+                            new_beam.append((X_new, new_var_dict))
+        
+        done = (len(new_beam) == 0)
+        current_beam = new_beam
+        new_beam = []
+
+
+    # scoring final beam
+    beam_r2s = []
+    for X_beam, _ in final_beam:
+        regr_bb.fit(X_beam, y)
+        r2 = r2_score(y, regr_bb.predict(X_beam))
+        beam_r2s.append(r2)
+
+    # keeping only top
+    sort_idxs = np.argsort(-np.array(beam_r2s))[:topk]  
+
+    if 0 not in sort_idxs:
+        final_beam = [final_beam[i] for i in sort_idxs] + [final_beam[0]]
+        final_r2s = [beam_r2s[i] for i in sort_idxs] + [beam_r2s[0]]
+    else:
+        final_beam = [final_beam[i] for i in sort_idxs]
+        final_r2s = [beam_r2s[i] for i in sort_idxs]
+
+    return final_beam, final_r2s
 
 ########################
 # Sklearn Interface
