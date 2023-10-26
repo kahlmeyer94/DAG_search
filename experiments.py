@@ -713,7 +713,7 @@ if __name__ == '__main__':
             #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
             #'DAGSearch' : (dag_search.DAGRegressor(processes = 10, random_state = rand_state), True), 
-            'DAGSearch_Simpl' : (dag_search.SimplificationRegressor(regr_search = regr_symb, regr_blackbox = regr_blackbox,random_state = rand_state, n_processes = 10), True), 
+            'DAGSearch_Simpl' : (dag_search.SimplificationRegressor(processes = 10, regr_search = regr_symb, random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:

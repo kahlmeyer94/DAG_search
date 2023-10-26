@@ -1436,7 +1436,7 @@ def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 1
 
     return res['graphs'], res['losses']
 
-def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 2, topk:int = 5, n_calc_nodes:int = 2, mode:str = 'gradient', loss_thresh:float = 1e-1, n_processes:int = 1, random_state:int = 0):
+def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 1, topk:int = 3, n_calc_nodes:int = 2, mode:str = 'gradient', loss_thresh:float = 1e-1, n_processes:int = 1, random_state:int = 0):
     np.random.seed(random_state)
 
     # beam consists of tuples (data, translation)
@@ -1585,7 +1585,7 @@ class PolyReg():
             expr += alpha*x_name
         return expr
 
-class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
 
@@ -1731,28 +1731,29 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
 
         return self.expr
     
-class SimplificationRegressorNew(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
 
     Sklearn interface for symbolic Regressor based on simplification strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 2):
+    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 1, processes:int = 1):
         self.random_state = random_state
+        self.processes = processes
         if regr_search is None:
-            regr_search = DAGRegressor(random_state = random_state)
+            regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
         if regr_blackbox is None:
             regr_blackbox = PolyReg(degree = 5)
         self.regr_search = regr_search
         self.regr_blackbox = regr_blackbox
         self.simpl_nodes = simpl_nodes
 
-    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0, n_processes:int = 1):
+    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         
         if verbose > 0:
             print('Searching for Simplifications')
-        subs, _ = find_best_substitutions(X, y, self.regr_blackbox, verbose = verbose, n_processes=n_processes, n_calc_nodes=self.simpl_nodes)
+        subs, _ = find_best_substitutions(X, y, self.regr_blackbox, verbose = verbose, n_processes=self.processes, n_calc_nodes=self.simpl_nodes)
         
         if verbose > 0:
             print('Searching for Expression')
