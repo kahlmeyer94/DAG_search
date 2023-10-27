@@ -16,6 +16,7 @@ import sklearn
 
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn.model_selection import train_test_split
 
 from DAG_search import config
 from DAG_search import comp_graph
@@ -234,7 +235,6 @@ class Gradient_loss_fkt(DAG_Loss_fkt):
         self.regr = regr
         self.y = y
         self.regr.fit(X, y)
-        self.approx_error = np.mean((self.regr.predict(X) - y)**2)
         self.df_dx = utils.est_gradient(self.regr, X)
         
         
@@ -248,15 +248,16 @@ class Gradient_loss_fkt(DAG_Loss_fkt):
             c... array of constants (2D) [not used]
 
         @Returns:
-            MSE of gradients for substituted variables if we use graph as substitution
+            Median absolute error of gradients for substituted variables if we use graph as substitution
         '''
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            
+
             expr = cgraph.evaluate_symbolic()[0]
             used_idxs = sorted([int(str(e).split('_')[-1]) for e in expr.free_symbols])
             
             if len(used_idxs) > 1:
+
                 X_new, grad_new = cgraph.evaluate(X, np.array([]), return_grad = True)
                 X_new = np.column_stack([X_new] + [X[:, i] for i in range(X.shape[1]) if i not in used_idxs])
 
@@ -1116,7 +1117,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 
     return ret
 
-def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, stop_thresh:float = -1.0, hierarchy_stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
     '''
     Exhaustive search for a DAG but hierarchical.
 
@@ -1133,6 +1134,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
         max_orders... will at most evaluate this many chosen orders
         max_size... will only return at most this many graphs (sorted by loss)
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
+        hierarchy_stop_thresh... if loss of any top performer is lower than this, will stop after hierarchy step
         unique_loss... only take graph into topk if it has a totally new loss
     @Returns:
         dictionary with:
@@ -1258,7 +1260,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             cgraph = build_dag(order, ops, m, n, k)
             top_graphs.append(cgraph.copy())
 
-        if top_losses[0] <= stop_thresh:
+        if top_losses[0] <= stop_thresh or np.any(np.array(top_losses) <= hierarchy_stop_thresh):
             if verbose > 0:
                 print(f'Stopping because early stop criteria has been matched!')
             break
@@ -1412,7 +1414,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 # New: Simplification Regressor
 # ########################
 
-def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 1, verbose:int = 2, loss_thresh:float = 1e-10, n_processes:int = 1, max_samples:int = 100, mode:str = 'gradient', topk:int = 10) -> comp_graph.CompGraph:
+def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 1, verbose:int = 2, hierarchy_stop_thresh:float = 1e-1, n_processes:int = 1, mode:str = 'gradient', topk:int = 10) -> comp_graph.CompGraph:
     # 1. find best substitution on subset
 
     if mode == 'gradient':
@@ -1430,21 +1432,21 @@ def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 1
         'topk' : topk,
         'verbose' : verbose,
         'max_orders' : 10000, 
-        'stop_thresh' : loss_thresh
+        'hierarchy_stop_thresh' : hierarchy_stop_thresh
     }
-    res = exhaustive_search(**params)
+    res = hierarchical_search(**params)
 
     return res['graphs'], res['losses']
 
-def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 1, topk:int = 3, n_calc_nodes:int = 2, mode:str = 'gradient', loss_thresh:float = 1e-1, n_processes:int = 1, random_state:int = 0):
+def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 2, topk:int = 5, n_calc_nodes:int = 2, mode:str = 'gradient', hierarchy_stop_thresh:float = 1e-1, n_processes:int = 1, random_state:int = 0):
     np.random.seed(random_state)
-
     # beam consists of tuples (data, translation)
 
     var_dict = {f'x_{i}' : f'z_{i}' for i in range(X.shape[1])}
     orig_tuple = (X, var_dict)
 
-    final_beam = []
+    final_beam = [orig_tuple]
+    final_losses = [0.0]
     unique_dicts = set()
 
     current_beam = [orig_tuple]
@@ -1454,7 +1456,6 @@ def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2
 
 
     while not done:
-        
         if verbose > 0:
             print('##############')
             print(f'# Evaluating Beam of Size {len(current_beam)}')
@@ -1462,13 +1463,7 @@ def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2
             
         
             
-        for X_current, var_dict in current_beam:
-            dict_tuple = tuple([var_dict[f'x_{i}'] for i in range(len(var_dict))])
-            if dict_tuple not in unique_dicts:
-                unique_dicts.add(dict_tuple)
-                final_beam.append((X_current, var_dict))
-            
-            
+        for X_current, var_dict in current_beam:        
             if X_current.shape[1] > 1:
                 if verbose > 0:
                     print(f'Searching for Simplification of')
@@ -1476,67 +1471,65 @@ def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2
                         print(f'{s} -> {var_dict[s]}')
                 
                 
-                graphs, losses = find_substitutions(X_current, y, regr_bb, n_calc_nodes = n_calc_nodes, verbose = verbose, mode = mode, topk = beamsize, n_processes=n_processes)
+                graphs, losses = find_substitutions(X_current, y, regr_bb, n_calc_nodes = n_calc_nodes, verbose = verbose, mode = mode, topk = beamsize, n_processes=n_processes, hierarchy_stop_thresh=hierarchy_stop_thresh)
 
-                if np.any(np.array(losses) <= loss_thresh):
-                    for graph, loss in zip(graphs, losses):
-                        if loss <= loss_thresh:
-                            # carry out substitution
-                            sub_expr = graph.evaluate_symbolic()[0]
-                            sub_loss = loss
-                            if verbose > 0:
-                                print(f'Substitution: {sub_expr}\tLoss: {sub_loss}')
+                for graph, loss in zip(graphs, losses):
+                    
+                    if (loss <= np.min(final_losses)) or (len(final_losses) < topk):
+
+                        # carry out substitution
+                        sub_expr = graph.evaluate_symbolic()[0]
+                        sub_loss = loss
+                        if verbose > 0:
+                            print(f'Substitution: {sub_expr}\tLoss: {sub_loss}')
+
+                        # substitute
+                        used_idxs = sorted([int(str(e).split('_')[-1]) for e in sub_expr.free_symbols])
+                        X_new = graph.evaluate(X_current, np.array([]))
+                        X_new = np.column_stack([X_new] + [X_current[:, i] for i in range(X_current.shape[1]) if i not in used_idxs])
+
+                        sub_expr = str(sub_expr)
+                        for i in range(X_current.shape[1]-1 , -1, -1):
+                            s = f'x_{i}'
+                            sub_expr = sub_expr.replace(s, f'({var_dict[s]})')
+
+                        new_var_dict = {f'x_0' : sub_expr}
+                        for i in range(X_current.shape[1]):
+                            if i not in used_idxs:
+                                s_new = f'x_{len(new_var_dict)}'
+                                s_old = f'x_{i}'
+                                new_var_dict[s_new] = var_dict[s_old]
+
+                        dict_tuple = tuple([new_var_dict[f'x_{i}'] for i in range(len(new_var_dict))])
+                        if dict_tuple not in unique_dicts:
+                            unique_dicts.add(dict_tuple)
 
 
-
-                            # substitute
-                            used_idxs = sorted([int(str(e).split('_')[-1]) for e in sub_expr.free_symbols])
-                            X_new = graph.evaluate(X_current, np.array([]))
-                            X_new = np.column_stack([X_new] + [X_current[:, i] for i in range(X_current.shape[1]) if i not in used_idxs])
-
-                            sub_expr = str(sub_expr)
-                            sub_expr_raw = sub_expr
-                            for i in range(X_current.shape[1]-1 , -1, -1):
-                                s = f'x_{i}'
-                                sub_expr = sub_expr.replace(s, f'({var_dict[s]})')
-
-                            new_var_dict = {f'x_0' : sub_expr}
-                            for i in range(X_current.shape[1]):
-                                if i not in used_idxs:
-                                    s_new = f'x_{len(new_var_dict)}'
-                                    s_old = f'x_{i}'
-                                    new_var_dict[s_new] = var_dict[s_old]
-
+                            # add to new beam
                             new_beam.append((X_new, new_var_dict))
+
+                            # add to final solutions (+ update)
+                            final_losses.append(loss)
+                            final_beam.append((X_new, new_var_dict))
+                            sort_idxs = np.argsort(final_losses)
+                            final_losses = [final_losses[i] for i in sort_idxs[:topk]]
+                            final_beam = [final_beam[i] for i in sort_idxs[:topk]]
+
+
+                            
         
         done = (len(new_beam) == 0)
         current_beam = new_beam
         new_beam = []
 
 
-    # scoring final beam
-    beam_r2s = []
-    for X_beam, _ in final_beam:
-        regr_bb.fit(X_beam, y)
-        r2 = r2_score(y, regr_bb.predict(X_beam))
-        beam_r2s.append(r2)
+    # sort by size
+    #sizes = [X_beam.shape[1] for X_beam, _ in final_beam]
+    #sort_idxs = np.argsort(sizes)
+    #final_beam = [final_beam[i] for i in sort_idxs]
+    #final_losses = [final_losses[i] for i in sort_idxs]
 
-    # keeping only top
-    sort_idxs = np.argsort(-np.array(beam_r2s))[:topk]  
-
-    if 0 not in sort_idxs:
-        final_beam = [final_beam[i] for i in sort_idxs] + [final_beam[0]]
-        final_r2s = [beam_r2s[i] for i in sort_idxs] + [beam_r2s[0]]
-    else:
-        final_beam = [final_beam[i] for i in sort_idxs]
-        final_r2s = [beam_r2s[i] for i in sort_idxs]
-
-    sizes = [X_beam.shape[1] for X_beam, _ in final_beam]
-    sort_idxs = np.argsort(sizes)
-    final_beam = [final_beam[i] for i in sort_idxs]
-    final_r2s = [beam_r2s[i] for i in sort_idxs]
-
-    return final_beam, final_r2s
+    return final_beam, final_losses
 
 class PolyReg():
     '''
@@ -1584,6 +1577,104 @@ class PolyReg():
         for x_name, alpha in zip(X_poly, self.regr.coef_):
             expr += alpha*x_name
         return expr
+
+class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+    '''
+    Symbolic DAG-Search
+
+    Sklearn interface for symbolic Regressor based on simplification strategies.
+    '''
+
+    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 2, processes:int = 1):
+        self.random_state = random_state
+        self.processes = processes
+        self.regr_search = regr_search
+        self.regr_blackbox = regr_blackbox
+        self.simpl_nodes = simpl_nodes
+
+    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
+        if self.regr_search is None:
+            self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
+        if self.regr_blackbox is None:
+            # select blackbox from test performance
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            polydegrees = np.arange(1, 10, 1)
+            test_r2s = []
+            for degree in polydegrees:
+                regr_bb = PolyReg(degree = degree)
+                regr_bb.fit(X_train, y_train)
+                pred = regr_bb.predict(X_test)
+                test_r2s.append(r2_score(y_test, pred))
+            self.regr_blackbox = PolyReg(degree = polydegrees[np.argmax(test_r2s)])
+
+
+        if verbose > 0:
+            print('Searching for Simplifications')
+        subs, _ = find_best_substitutions(X, y, self.regr_blackbox, verbose = verbose, n_processes=self.processes, n_calc_nodes=self.simpl_nodes)
+        
+        if verbose > 0:
+            print('Searching for Expression')
+
+        # testing the best substitutions
+        r2s = []
+        exprs = []
+        for X_sub, var_dict in subs:
+            if verbose > 0:
+                print('Substitution:')
+                for s in var_dict:
+                    print(f'{s} -> {var_dict[s]}')
+
+            self.regr_search.fit(X_sub, y, verbose = verbose)
+            pred = self.regr_search.predict(X_sub)
+            r2 = r2_score(y, pred)
+            r2s.append(r2)
+            exprs.append(self.regr_search.model())
+            if r2 > 1-1e-3:
+                break
+        best_idx = np.argmax(r2s)
+
+        # save models
+        self.exprs = exprs
+        self.r2s = r2s
+
+        expr = exprs[best_idx]
+        X_simpl, var_dict = subs[best_idx]
+
+        
+
+        expr_str = str(expr)
+        for i in range(X_simpl.shape[1]-1 , -1, -1):
+            s = f'x_{i}'
+            expr_str = expr_str.replace(s, f'({var_dict[s]})')
+        expr_str = expr_str.replace('z_', 'x_')
+        self.expr = sympy.sympify(expr_str)
+        x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+        self.exec_func = sympy.lambdify(x_symbs, self.expr)
+         
+        return self
+    
+    def predict(self, X):
+        assert hasattr(self, 'expr')
+
+        if not hasattr(self, 'exec_func'):
+            x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+            self.exec_func = sympy.lambdify(x_symbs, self.expr)
+            
+        return self.exec_func(*[X[:, i] for i in range(X.shape[1])])
+
+    def complexity(self):
+        '''
+        Complexity of expression (number of calculations)
+        '''
+        assert hasattr(self, 'expr')
+        return utils.tree_size(self.expr)
+
+    def model(self):
+        '''
+        Evaluates symbolic expression.
+        '''
+        assert hasattr(self, 'expr'), 'No expression found yet. Call .fit first!'
+        return self.expr
 
 class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
@@ -1731,90 +1822,3 @@ class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.Regres
 
         return self.expr
     
-class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
-    '''
-    Symbolic DAG-Search
-
-    Sklearn interface for symbolic Regressor based on simplification strategies.
-    '''
-
-    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 1, processes:int = 1):
-        self.random_state = random_state
-        self.processes = processes
-        if regr_search is None:
-            regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
-        if regr_blackbox is None:
-            regr_blackbox = PolyReg(degree = 5)
-        self.regr_search = regr_search
-        self.regr_blackbox = regr_blackbox
-        self.simpl_nodes = simpl_nodes
-
-    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
-        
-        if verbose > 0:
-            print('Searching for Simplifications')
-        subs, _ = find_best_substitutions(X, y, self.regr_blackbox, verbose = verbose, n_processes=self.processes, n_calc_nodes=self.simpl_nodes)
-        
-        if verbose > 0:
-            print('Searching for Expression')
-
-        # testing the best substitutions
-        r2s = []
-        exprs = []
-        for X_sub, var_dict in subs:
-            if verbose > 0:
-                print('Substitution:')
-                for s in var_dict:
-                    print(f'{s} -> {var_dict[s]}')
-
-            self.regr_search.fit(X_sub, y, verbose = verbose)
-            pred = self.regr_search.predict(X_sub)
-            r2 = r2_score(y, pred)
-            r2s.append(r2)
-            exprs.append(self.regr_search.model())
-            if r2 > 1-1e-3:
-                break
-        best_idx = np.argmax(r2s)
-
-        # save models
-        self.exprs = exprs
-        self.r2s = r2s
-
-        expr = exprs[best_idx]
-        X_simpl, var_dict = subs[best_idx]
-
-        
-
-        expr_str = str(expr)
-        for i in range(X_simpl.shape[1]-1 , -1, -1):
-            s = f'x_{i}'
-            expr_str = expr_str.replace(s, f'({var_dict[s]})')
-        expr_str = expr_str.replace('z_', 'x_')
-        self.expr = sympy.sympify(expr_str)
-        x_symbs = [f'x_{i}' for i in range(X.shape[1])]
-        self.exec_func = sympy.lambdify(x_symbs, self.expr)
-         
-        return self
-    
-    def predict(self, X):
-        assert hasattr(self, 'expr')
-
-        if not hasattr(self, 'exec_func'):
-            x_symbs = [f'x_{i}' for i in range(X.shape[1])]
-            self.exec_func = sympy.lambdify(x_symbs, self.expr)
-            
-        return self.exec_func(*[X[:, i] for i in range(X.shape[1])])
-
-    def complexity(self):
-        '''
-        Complexity of expression (number of calculations)
-        '''
-        assert hasattr(self, 'expr')
-        return utils.tree_size(self.expr)
-
-    def model(self):
-        '''
-        Evaluates symbolic expression.
-        '''
-        assert hasattr(self, 'expr'), 'No expression found yet. Call .fit first!'
-        return self.expr
