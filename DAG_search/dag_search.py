@@ -1438,7 +1438,7 @@ def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 1
 
     return res['graphs'], res['losses']
 
-def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 2, topk:int = 3, n_calc_nodes:int = 2, mode:str = 'gradient', hierarchy_stop_thresh:float = 1e-1, n_processes:int = 1, random_state:int = 0):
+def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 2, topk:int = 5, n_calc_nodes:int = 2, mode:str = 'gradient', hierarchy_stop_thresh:float = 1e-1, n_processes:int = 1, random_state:int = 0):
     np.random.seed(random_state)
     # beam consists of tuples (data, translation)
 
@@ -1585,7 +1585,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
     Sklearn interface for symbolic Regressor based on simplification strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 1, processes:int = 1):
+    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 2, processes:int = 1):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -1598,7 +1598,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
         if self.regr_blackbox is None:
             # select blackbox from test performance
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-            polydegrees = np.arange(1, 7, 1)
+            polydegrees = np.arange(1, 5, 1)
             test_r2s = []
             for degree in polydegrees:
                 regr_bb = PolyReg(degree = degree)
