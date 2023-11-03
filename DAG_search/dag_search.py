@@ -1286,7 +1286,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(2e5), random_state:int = None, processes:int = 1, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(5e5), random_state:int = None, processes:int = 1, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1414,7 +1414,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 # New: Simplification Regressor
 # ########################
 
-def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 1, verbose:int = 2, hierarchy_stop_thresh:float = 1e-1, n_processes:int = 1, mode:str = 'gradient', topk:int = 10) -> comp_graph.CompGraph:
+def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 2, verbose:int = 2, hierarchy_stop_thresh:float = 1e-2, n_processes:int = 1, mode:str = 'gradient', topk:int = 10) -> comp_graph.CompGraph:
     # 1. find best substitution on subset
 
     if mode == 'gradient':
@@ -1438,7 +1438,7 @@ def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 1
 
     return res['graphs'], res['losses']
 
-def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 2, topk:int = 5, n_calc_nodes:int = 2, mode:str = 'gradient', hierarchy_stop_thresh:float = 1e-1, n_processes:int = 1, random_state:int = 0):
+def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2, beamsize:int = 5, topk:int = 3, n_calc_nodes:int = 2, mode:str = 'gradient', hierarchy_stop_thresh:float = 1e-3, n_processes:int = 1, random_state:int = 0):
     np.random.seed(random_state)
     # beam consists of tuples (data, translation)
 
@@ -1585,12 +1585,13 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
     Sklearn interface for symbolic Regressor based on simplification strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 2, processes:int = 1):
+    def __init__(self, random_state:int = None, regr_search = None, regr_blackbox = None, simpl_nodes:int = 2, processes:int = 1, mode = 'gradient'):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
         self.regr_blackbox = regr_blackbox
         self.simpl_nodes = simpl_nodes
+        self.mode = mode
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         if self.regr_search is None:
@@ -1610,7 +1611,7 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
 
         if verbose > 0:
             print('Searching for Simplifications')
-        subs, _ = find_best_substitutions(X, y, self.regr_blackbox, verbose = verbose, n_processes=self.processes, n_calc_nodes=self.simpl_nodes)
+        subs, _ = find_best_substitutions(X, y, self.regr_blackbox, verbose = verbose, n_processes=self.processes, n_calc_nodes=self.simpl_nodes, mode = self.mode)
         
         if verbose > 0:
             print('Searching for Expression')
