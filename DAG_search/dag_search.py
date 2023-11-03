@@ -208,9 +208,12 @@ class Fit_loss_fkt(DAG_Loss_fkt):
                 X_new = np.column_stack([X_new] + [X[:, i] for i in range(X.shape[1]) if i not in used_idxs])
 
                 if np.all(np.isreal(X_new) & np.isfinite(X_new) & (np.abs(X_new) < 1000)): 
-                    self.regr.fit(X_new[self.train_idxs], self.y[self.train_idxs])
-                    pred = self.regr.predict(X_new[self.test_idxs])
-                    loss = 1 - r2_score(self.y[self.test_idxs], pred)
+                    try:
+                        self.regr.fit(X_new[self.train_idxs], self.y[self.train_idxs])
+                        pred = self.regr.predict(X_new[self.test_idxs])
+                        loss = 1 - r2_score(self.y[self.test_idxs], pred)
+                    except numpy.linalg.LinAlgError:
+                        loss = np.inf
                 else:
                     loss = np.inf
             else:
