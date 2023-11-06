@@ -212,7 +212,7 @@ class Fit_loss_fkt(DAG_Loss_fkt):
                         self.regr.fit(X_new[self.train_idxs], self.y[self.train_idxs])
                         pred = self.regr.predict(X_new[self.test_idxs])
                         loss = 1 - r2_score(self.y[self.test_idxs], pred)
-                    except numpy.linalg.LinAlgError:
+                    except np.linalg.LinAlgError:
                         loss = np.inf
                 else:
                     loss = np.inf
