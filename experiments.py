@@ -711,7 +711,8 @@ if __name__ == '__main__':
             #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
             #'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
-            'DAGSearch_grad' : (dag_search.SimplificationRegressor(processes = 32, random_state = rand_state), True), 
+            #'DAGSearch_grad' : (dag_search.SimplificationRegressor(processes = 32, random_state = rand_state), True), 
+            'DAGSearch_poly' : (dag_search.SimplificationRegressor(processes = 32, random_state = rand_state, mode = 'fit'), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
