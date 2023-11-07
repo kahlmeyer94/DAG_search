@@ -22,6 +22,10 @@ from DAG_search import config
 from DAG_search import comp_graph
 from DAG_search import utils
 
+
+# TODO: remove
+from timeit import default_timer as timer
+
 ########################
 # Loss Functions + Optimizing constants
 ########################
@@ -218,7 +222,6 @@ class Fit_loss_fkt(DAG_Loss_fkt):
                     loss = np.inf
             else:
                 loss = np.inf
-            
         return loss
 
 class Gradient_loss_fkt(DAG_Loss_fkt):
@@ -491,6 +494,24 @@ def build_dag(build_order:list, node_ops:list, m:int, n:int, k:int) -> comp_grap
         node_dict[i] = (list(parents), op)
     return comp_graph.CompGraph(m = m, n = n, k = k, node_dict = node_dict)
 
+def adapt_ops(cgraph:comp_graph.CompGraph, build_order:list, node_ops:list) -> comp_graph.CompGraph:
+    '''
+    Given a computational Graph, changes the operations at nodes (no need to reinstantiate)
+
+    @Params:
+        cgraph... Computational DAG
+        build_order... list of tuples (node, parent_nodes)
+        node_ops... list of operations for each node
+
+    @Returns:
+        Computational DAG
+    '''
+    node_dict = cgraph.node_dict
+    for op, (i, parents) in zip(node_ops, build_order):
+        node_dict[i] = (list(parents), op)
+    cgraph.node_dict = node_dict
+    return cgraph
+
 def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 10000, verbose:int = 0, fix_size : bool = False) -> list:
     '''
     Creates empty DAG scaffolds (no operations yet).
@@ -654,8 +675,8 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
         evaluate = not bool(stop_var)
 
 
-    if not loss_fkt.opt_const:
-        return [], loss_fkt(X, cgraph, [])
+    if (not loss_fkt.opt_const) or (cgraph.n_consts == 0):
+        return np.array([]), loss_fkt(X, cgraph, np.array([]))
 
     if evaluate:
 
@@ -707,7 +728,9 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
 
     outp_nodes = [m + k + i for i in range(n)]
     op_spaces = []
-    for node, parents in order:
+
+    transl_dict = {}
+    for i, (node, parents) in enumerate(order):
         if len(parents) == 2:
             op_spaces.append(bin_ops)
         else:
@@ -715,19 +738,114 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                 op_spaces.append(un_ops)
             else:
                 op_spaces.append([op for op in un_ops if op != '='])
-            
+        transl_dict[node] = i            
 
     ret_consts = []
     ret_losses = []
     ret_ops = []
+
+    cgraph = None
+
+    inv_array = []
+
     for ops in itertools.product(*op_spaces):
-        cgraph = build_dag(order, ops, m, n, k)
+
+        if len(inv_array) > 0:
+            num_ops = np.array([config.NODE_ID[op] for op in ops])
+            is_inv = np.sum((inv_array - num_ops)*(inv_array > 0).astype(int), axis = 1)
+            is_inv = np.any(is_inv == 0)
+        else:
+            is_inv = False
+
+        if not is_inv:
+            if cgraph is None:
+                cgraph = build_dag(order, ops, m, n, k)
+            else:
+                cgraph = adapt_ops(cgraph, order, ops)
+
+            consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
+
+            if loss >= 1000 or (not np.isfinite(loss)):
+                # check for nonfinites
+                nonfins = cgraph.get_invalids(X, consts)
+                if (len(nonfins) < len(op_spaces)) and (len(nonfins) > 0):
+                    tmp = np.zeros(len(op_spaces))
+                    for node_idx in nonfins:
+                        idx = transl_dict[node_idx]
+                        tmp[idx] = config.NODE_ID[ops[idx]]
+                    if len(inv_array) == 0:
+                        inv_array = tmp.reshape(1, -1)
+                    else:
+                        inv_array = np.row_stack([inv_array, tmp])
+                
+
+
+            ret_consts.append(consts)
+            ret_losses.append(loss)
+            ret_ops.append(ops)
+        else:
+            pass
+    return ret_consts, ret_losses, ret_ops
+
+def evaluate_build_order_old(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid', loss_thresh:float = None) -> tuple:
+    '''
+    Given a build order (output of get_build_orders), tests all possible assignments of operators.
+
+    @Params:
+        order... list of tuples (node, parent_nodes)
+        m... number of input nodes
+        n... number of output nodes
+        k... number of constant nodes
+        X... input for DAGs
+        loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
+        opt_mode... one of {pool, opt, grid, grid_opt}
+        loss_thresh... only set in multiprocessing context - to communicate between processes
+        
+    @Returns:
+        tuple:
+            constants... list of optimized constants
+            losses... list of losses for DAGs
+            ops... list of ops that were tried
+    '''
+
+    
+    bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
+    un_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 1]
+
+    outp_nodes = [m + k + i for i in range(n)]
+    op_spaces = []
+
+    for i, (node, parents) in enumerate(order):
+        if len(parents) == 2:
+            op_spaces.append(bin_ops)
+        else:
+            if node in outp_nodes:
+                op_spaces.append(un_ops)
+            else:
+                op_spaces.append([op for op in un_ops if op != '='])       
+
+    ret_consts = []
+    ret_losses = []
+    ret_ops = []
+
+    cgraph = None
+
+    for ops in itertools.product(*op_spaces):
+
+        
+        if cgraph is None:
+            cgraph = build_dag(order, ops, m, n, k)
+        else:
+            cgraph = adapt_ops(cgraph, order, ops)
+
         consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
+   
         ret_consts.append(consts)
         ret_losses.append(loss)
         ret_ops.append(ops)
 
     return ret_consts, ret_losses, ret_ops
+
 
 def sample_graph(m:int, n:int, k:int, n_calc_nodes:int) -> comp_graph.CompGraph:
     '''

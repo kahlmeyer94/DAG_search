@@ -113,3 +113,23 @@ NODE_OPS_SYMB = {
     'sqrt' : lambda x: sympy.sqrt(x),
     'sq' : lambda x: x**2
 }
+
+NODE_ID = {
+    '+' : 1,
+    '*' : 2,
+    'sub_l' : 3,
+    'sub_r' : 4,
+    'div_l' : 5,
+    'div_r' : 6,
+    #'pow_l' : 16,
+    #'pow_r' : 17,
+    '=' : 7,
+    'inv' : 8,
+    'neg' : 9,
+    'sin' : 10,
+    'cos' : 11,
+    'exp' : 12,
+    'log' : 13,
+    'sqrt' : 14,
+    'sq' : 15
+}

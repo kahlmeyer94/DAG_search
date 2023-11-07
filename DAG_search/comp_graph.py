@@ -423,6 +423,54 @@ class CompGraph():
             else:
                 return final_result
 
+    def get_invalids(self, X, c):
+        '''
+        Returns first occurence of a non-finite result as 
+        node, predecessors
+
+        X... N x m matrix
+        c... array of length n_consts
+        '''
+        assert len(self.node_dict) >= self.inp_dim + self.n_consts + self.outp_dim, 'Node dict not initialized'
+        assert len(c.shape) <= 1, 'Constants must be 1D (single)'
+
+        c = c.reshape(1, -1)
+        r = 1
+
+        # we assume that eval order is valid
+
+        N = X.shape[0]
+        k = self.inp_dim + self.n_consts
+
+        res_dict = {i : None for i in self.node_dict}
+
+        # inputs        
+        for i in range(self.inp_dim):
+            res_dict[i] = np.repeat(X[np.newaxis, :, i], r, axis=0) # r x N
+
+        for i in range(self.n_consts):
+            res_dict[i + self.inp_dim] = np.repeat(c[:, i, np.newaxis], N, axis = 1) # r x N
+
+        # others
+        for i in self.eval_order[k:]:
+            children, op = self.node_dict[i]
+            node_op = config.NODE_OPS[op]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                if len(children) == 2:
+                    node_result = node_op(res_dict[children[0]], res_dict[children[1]])
+                else:
+                    assert len(children) == 1
+                    node_result = node_op(res_dict[children[0]])
+                res_dict[i] = node_result
+                if not np.all(np.isfinite(node_result)):
+                    return [i for i in np.where(self.R[i] > 0)[0] if i >= self.inp_dim + self.n_consts]
+        return []
+
+
+
+        
+
     def evaluate(self, X, c, return_grad = False):
         '''
         X... N x m matrix
