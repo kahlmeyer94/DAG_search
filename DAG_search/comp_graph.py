@@ -468,9 +468,6 @@ class CompGraph():
         return []
 
 
-
-        
-
     def evaluate(self, X, c, return_grad = False):
         '''
         X... N x m matrix

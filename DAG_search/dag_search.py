@@ -747,7 +747,6 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
     cgraph = None
 
     inv_array = []
-
     for ops in itertools.product(*op_spaces):
 
         if len(inv_array) > 0:
@@ -766,17 +765,23 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
             consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
 
             if loss >= 1000 or (not np.isfinite(loss)):
-                # check for nonfinites
-                nonfins = cgraph.get_invalids(X, consts)
-                if (len(nonfins) < len(op_spaces)) and (len(nonfins) > 0):
-                    tmp = np.zeros(len(op_spaces))
-                    for node_idx in nonfins:
-                        idx = transl_dict[node_idx]
-                        tmp[idx] = config.NODE_ID[ops[idx]]
-                    if len(inv_array) == 0:
-                        inv_array = tmp.reshape(1, -1)
-                    else:
-                        inv_array = np.row_stack([inv_array, tmp])
+                evaluate = True
+                if loss_thresh is not None:
+                    # we are in parallel mode
+                    global stop_var
+                    evaluate = not bool(stop_var)
+                if evaluate:
+                    # check for nonfinites
+                    nonfins = cgraph.get_invalids(X, consts)
+                    if (len(nonfins) < len(op_spaces)) and (len(nonfins) > 0):
+                        tmp = np.zeros(len(op_spaces))
+                        for node_idx in nonfins:
+                            idx = transl_dict[node_idx]
+                            tmp[idx] = config.NODE_ID[ops[idx]]
+                        if len(inv_array) == 0:
+                            inv_array = tmp.reshape(1, -1)
+                        else:
+                            inv_array = np.row_stack([inv_array, tmp])
                 
 
 
