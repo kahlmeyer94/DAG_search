@@ -88,9 +88,7 @@ class MSE_loss_fkt(DAG_Loss_fkt):
             losses = np.mean((pred.reshape(r, -1) - self.outp.flatten())**2, axis=-1)
             
             # must not be nan or inf
-            invalid = np.zeros(r).astype(bool)
-            invalid = invalid | np.isnan(losses)
-            invalid = invalid | np.isinf(losses)
+            invalid = ~np.isfinite(losses)
             
         # consider not using inf, since optimizers struggle with this
         losses[invalid] = 1000
@@ -103,6 +101,59 @@ class MSE_loss_fkt(DAG_Loss_fkt):
             return losses
 
 class R2_loss_fkt(DAG_Loss_fkt):
+    def __init__(self, outp:np.ndarray):
+        '''
+        Loss function for finding DAG for regression task.
+
+        @Params:
+            outp... output that DAG should match (N x n)
+        '''
+        super().__init__()
+        self.outp = outp # N x n
+        self.outp_var = np.var(self.outp, axis = 0) # n
+        
+    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
+        '''
+        Lossfkt(X, graph, consts)
+
+        @Params:
+            X... input for DAG (N x m)
+            cgraph... computational Graph
+            c... array of constants (2D)
+
+        @Returns:
+            1-R2 of graph output and desired output for different constants
+            = Fraction of variance unexplained
+        '''
+        if len(c.shape) == 2:
+            r = c.shape[0]
+            vec = True
+        else:
+            r = 1
+            c = c.reshape(1, -1)
+            vec = False
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            
+            pred = cgraph.evaluate(X, c = c) # r x N x n
+            mses = np.mean((pred - self.outp)**2, axis=1) # r x n
+            losses = np.mean(mses/self.outp_var, axis = 1) # r
+            
+            # must not be nan or inf
+            invalid = ~np.isfinite(losses)
+            
+        # consider not using inf, since optimizers struggle with this
+        losses[invalid] = 1000
+        losses[losses > 1000] = 1000
+        losses[losses < 0] = 1000
+
+        if not vec:
+            return losses[0]
+        else:
+            return losses
+
+class R2_loss_fkt_old(DAG_Loss_fkt):
     def __init__(self, outp:np.ndarray):
         '''
         Loss function for finding DAG for regression task.
@@ -747,11 +798,12 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
     cgraph = None
 
     inv_array = []
+    inv_mask = []
     for ops in itertools.product(*op_spaces):
 
         if len(inv_array) > 0:
             num_ops = np.array([config.NODE_ID[op] for op in ops])
-            is_inv = np.sum((inv_array - num_ops)*(inv_array > 0).astype(int), axis = 1)
+            is_inv = np.sum((inv_array - num_ops)*inv_mask, axis = 1)
             is_inv = np.any(is_inv == 0)
         else:
             is_inv = False
@@ -782,6 +834,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                             inv_array = tmp.reshape(1, -1)
                         else:
                             inv_array = np.row_stack([inv_array, tmp])
+                        inv_mask = (inv_array > 0).astype(int)
                 
 
 
@@ -1484,7 +1537,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         # optimizing constants of top DAGs
         if verbose > 0:
             print('Optimizing best constants')
-        loss_fkt = self.loss_fkt(y)
+        loss_fkt = self.loss_fkt(y.reshape(-1, 1))
         losses = []
         consts = []
         for graph, c in zip(res['graphs'], res['consts']):
