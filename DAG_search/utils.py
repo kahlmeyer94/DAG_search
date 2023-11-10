@@ -295,7 +295,7 @@ def symb_eq(expr_est, expr_true) -> bool:
         # all kind of exotic sympy exceptions can occur here.
         return False
 
-def round_floats(ex1, max_v:int = 1000):
+def round_floats(ex1, round_digits:int = 3, max_v:int = 1000):
     '''
     Rounds floats within sympy expression.
 
@@ -324,11 +324,11 @@ def round_floats(ex1, max_v:int = 1000):
                         else:
                             ex2 = ex2.subs(a, -sympy.oo)
                         ex2 = sympy.cancel(ex2)
-                    elif abs(round(a) - float(a)) <= 0.01:
+                    elif abs(round(a) - float(a)) <= 1/(10**round_digits):
                         found = True
                         ex2 = ex2.subs(a, sympy.Integer(round(a)))
                     else:
-                        ex2 = ex2.subs(a, sympy.Float(round(a, 3),3))
+                        ex2 = ex2.subs(a, sympy.Float(round(a, round_digits), round_digits))
         except (TypeError, ValueError):
             found = False
         ex1 = ex2

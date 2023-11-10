@@ -29,6 +29,7 @@ from timeit import default_timer as timer
 ########################
 # Loss Functions + Optimizing constants
 ########################
+
 class DAG_Loss_fkt(object):
     '''
     Abstract class for Loss function
@@ -49,6 +50,8 @@ class DAG_Loss_fkt(object):
             Loss function for different constants
         '''
         pass
+
+## Symbolic Regression
 
 class MSE_loss_fkt(DAG_Loss_fkt):
     def __init__(self, outp:np.ndarray):
@@ -215,6 +218,77 @@ class R2_loss_fkt_old(DAG_Loss_fkt):
             return losses[0]
         else:
             return losses
+
+## Substitution
+
+class Repl_loss_fkt(DAG_Loss_fkt):
+    def __init__(self, regr, y, test_perc = 0.1):
+        '''
+        Loss function for finding DAG for regression task.
+
+        @Params:
+            regr... regressor whos performance we compare
+            y... output of regression problem (N)
+        '''
+        super().__init__()
+        self.opt_const = False
+        self.regr = regr
+        self.y = y
+        
+        self.test_perc = test_perc
+        self.test_amount = int(self.test_perc*len(y))
+        assert self.test_amount > 0, f'Too little data for test share of {self.test_perc}'
+        all_idxs = np.arange(len(self.y))
+        np.random.shuffle(all_idxs)
+        self.test_idxs = all_idxs[:self.test_amount]
+        self.train_idxs = all_idxs[self.test_amount:]
+        
+    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray, return_idx:bool = False) -> np.ndarray:
+        '''
+        Lossfkt(X, graph, consts)
+
+        @Params:
+            X... input for DAG (N x m)
+            cgraph... computational Graph
+            c... array of constants (2D) [not used]
+
+        @Returns:
+            1 - R2 if we use graph as replacement feature
+        '''
+        ret_idx = None
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            
+            expr = cgraph.evaluate_symbolic()[0]
+            used_idxs = sorted([int(str(e).split('_')[-1]) for e in expr.free_symbols])
+            
+            if len(used_idxs) >= 1:
+                x_repl = cgraph.evaluate(X, np.array([]))[:, 0]
+                if np.all(np.isreal(x_repl) & np.isfinite(x_repl)): 
+                    losses = []
+                    combs = []
+                    for i in range(1, len(used_idxs) + 1):
+                        combs += [list(x) for x in itertools.combinations(used_idxs, i)]
+                    for repl_comb in combs:
+                        X_new = np.column_stack([x_repl, np.delete(X, repl_comb, axis = 1)])
+                        try:
+                            self.regr.fit(X_new[self.train_idxs], self.y[self.train_idxs])
+                            pred = self.regr.predict(X_new[self.test_idxs])
+                            loss = 1 - r2_score(self.y[self.test_idxs], pred)
+                        except (np.linalg.LinAlgError, ValueError):
+                            loss = np.inf
+                        losses.append(loss)
+                    loss = np.min(losses)
+                    ret_idx = combs[np.argmin(losses)]
+                else:
+                    loss = np.inf
+            else:
+                loss = np.inf
+
+        if return_idx:
+            return ret_idx
+        else:
+            return loss
 
 class Fit_loss_fkt(DAG_Loss_fkt):
     def __init__(self, regr, y, test_perc = 0.2):
@@ -1454,7 +1528,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 
 
 ########################
-# Sklearn Interface
+# Sklearn Interface for Symbolic Regression Task
 ########################
 
 
@@ -1527,7 +1601,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'opt_mode' : 'grid_zoom',
             'verbose' : verbose,
             'max_orders' : self.max_orders, 
-            'stop_thresh' : 1e-6
+            'stop_thresh' : 1e-10
         }
         if self.mode == 'hierarchical':
             res = hierarchical_search(**params)
@@ -1590,8 +1664,9 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         return self.cgraph.n_operations()
     
 ########################
-# New: Simplification Regressor
+# New: Substitution Regressor
 # ########################
+
 
 def find_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, n_calc_nodes:int = 2, verbose:int = 2, hierarchy_stop_thresh:float = 1e-2, n_processes:int = 1, mode:str = 'gradient', topk:int = 10) -> comp_graph.CompGraph:
     # 1. find best substitution on subset
@@ -2006,3 +2081,203 @@ class SimplificationRegressorOld(sklearn.base.BaseEstimator, sklearn.base.Regres
 
         return self.expr
     
+########################
+# New: Replacement Regressor
+# ########################
+
+class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+    '''
+    Symbolic DAG-Search
+
+    Sklearn interface for symbolic Regressor based on replacement strategies.
+    '''
+
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 2, topk:int = 3, max_orders:int = int(1e5), processes:int = 1):
+        self.random_state = random_state
+        self.processes = processes
+        self.regr_search = regr_search
+        self.regr_poly = None
+        self.simpl_nodes = simpl_nodes
+        self.max_orders = max_orders
+        self.topk = topk
+
+    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
+        if self.regr_search is None:
+            self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
+        
+        # fitting poly
+        fit_thresh = 1-1e-3
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        polydegrees = np.arange(1, 7, 1)
+        test_r2s = []
+        found = False
+        for degree in polydegrees:
+            regr_poly = PolyReg(degree = degree)
+            regr_poly.fit(X_train, y_train)
+            pred = regr_poly.predict(X_test)
+            s = r2_score(y_test, pred)
+            if s > fit_thresh:
+                found = True
+                break
+            else:
+                test_r2s.append(s)
+        
+        if found:
+            self.regr_poly = regr_poly
+        else:
+            self.regr_poly = PolyReg(degree = polydegrees[np.argmax(test_r2s)])
+
+
+        if verbose > 0:
+            print('Searching for Replacements')
+
+        loss_fkt = Repl_loss_fkt(self.regr_poly, y)
+        params = {
+            'X' : X,
+            'n_outps' : 1,
+            'loss_fkt' : loss_fkt,
+            'k' : 0,
+            'n_calc_nodes' : self.simpl_nodes,
+            'n_processes' : self.processes,
+            'topk' : self.topk,
+            'opt_mode' : 'grid_zoom',
+            'verbose' : verbose,
+            'max_orders' : self.max_orders, 
+            'stop_thresh' : 1e-20
+        }
+        res = exhaustive_search(**params)
+
+        if (res['losses'][0] < 1e-20):
+            # we solved it using a polynomial
+            if verbose > 0:
+                print('Solving with Polynomial')
+            graph = res['graphs'][0]
+            repl_expr = graph.evaluate_symbolic()[0]
+            repl_idx = loss_fkt(X, graph, [], True)
+
+            X_new = np.delete(X, repl_idx, axis = 1)
+            X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
+            
+            self.regr_poly.fit(X_new, y)
+            expr = utils.round_floats(self.regr_poly.model())
+
+            # translate back
+            expr = self._translate(X, repl_idx, expr, repl_expr)
+            
+        else:
+            # we couldnt solve it, try the best replacements + original problem
+            if verbose > 0:
+                print('Solving with Symbolic Regressor')
+            scores = []
+            exprs = []
+            found = False
+            for graph in res['graphs']:
+                repl_expr = graph.evaluate_symbolic()[0]
+                repl_idx = loss_fkt(X, graph, [], True)
+
+                if verbose > 1:
+                    print(f'Replacement: {repl_expr}\nIndices: {repl_idx}')
+                
+                X_new = np.delete(X, repl_idx, axis = 1)
+                X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
+
+                self.regr_search.fit(X_new, y, verbose = verbose)
+
+                expr = self.regr_search.model()
+                exprs.append(expr)
+
+                
+                pred = self.regr_search.predict(X_new)
+                score = r2_score(y, pred)
+                scores.append(score)
+
+                if score == 1.0:
+                    # we found the solution
+                    found = True
+                    break
+
+            best_idx = np.argmax(scores)
+            repl_expr = res['graphs'][best_idx].evaluate_symbolic()[0]
+            repl_idx = loss_fkt(X, graph, [], True)
+            expr = exprs[best_idx]
+            expr = self._translate(X, repl_idx, expr, repl_expr)
+
+
+            if not found:
+                # also try original problem
+                
+                if verbose > 1:
+                    print(f'Original Problem')
+                self.regr_search.fit(X, y, verbose = verbose)
+                pred = self.regr_search.predict(X)
+                score = r2_score(y, pred)
+                if score > scores[best_idx]:
+                    expr = self.regr_search.model()
+
+
+
+
+        self.expr = expr
+        x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+        self.exec_func = sympy.lambdify(x_symbs, self.expr)
+         
+        return self
+    
+    def predict(self, X):
+        assert hasattr(self, 'expr')
+
+        if not hasattr(self, 'exec_func'):
+            x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+            self.exec_func = sympy.lambdify(x_symbs, self.expr)
+            
+        return self.exec_func(*[X[:, i] for i in range(X.shape[1])])
+
+    def complexity(self):
+        '''
+        Complexity of expression (number of calculations)
+        '''
+        assert hasattr(self, 'expr')
+        return utils.tree_size(self.expr)
+
+    def model(self):
+        '''
+        Evaluates symbolic expression.
+        '''
+        assert hasattr(self, 'expr'), 'No expression found yet. Call .fit first!'
+        return self.expr
+    
+    def _translate(self, X, repl_idx, expr, repl_expr):
+        '''
+        Translates the expression back.
+
+        @Params:
+            X... original data
+            X_new... transformed data
+            repl_idx... indices that have been replaced
+            expr... final expression for X_new
+            repl_expr... expression for replacement
+
+        @Returns:
+            translated expression
+        '''
+
+        orig_idx = np.arange(X.shape[1])
+        new_idx = np.concatenate([np.array([-1]), np.delete(orig_idx, repl_idx)])
+        transl_dict = {}
+        for i in range(len(new_idx)):
+            n_i = new_idx[i]
+            if n_i == -1:
+                transl_dict[i] = str(repl_expr).replace('x_', 'z_')
+            else:
+                transl_dict[i] = f'z_{n_i}'
+
+        expr = str(expr)   
+        for i in transl_dict:
+            expr = expr.replace(f'x_{i}', f'({transl_dict[i]})')
+        expr = expr.replace('z_', 'x_')
+        expr = sympy.sympify(expr)
+
+        transl_dict = {}
+        for s in expr.free_symbols:
+            transl_dict[s] = sympy.Symbol(str(s), real = True)
+        return expr.subs(transl_dict)
