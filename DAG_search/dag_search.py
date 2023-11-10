@@ -2102,6 +2102,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.topk = topk
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
+        if self.random_state is not None:
+            np.random.seed(self.random_state)
         if self.regr_search is None:
             self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
         

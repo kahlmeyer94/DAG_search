@@ -93,6 +93,7 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
             'pred_test' : all_pred_test,
             'times' : all_times
         }
+        print(results[problem]['recovery'])
 
         with open(save_path, 'wb') as handle:
             pickle.dump(results, handle)
@@ -712,7 +713,7 @@ if __name__ == '__main__':
             #'dsr' : (regressors.DSR(), True),
             #'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
             #'DAGSearch_grad' : (dag_search.SimplificationRegressor(processes = 32, random_state = rand_state), True), 
-            'DAGSearch_poly' : (dag_search.SimplificationRegressor(processes = 32, random_state = rand_state, mode = 'fit'), True), 
+            'DAGSearch_poly' : (dag_search.PolySubRegressor(processes = 16, random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
