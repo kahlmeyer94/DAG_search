@@ -2135,9 +2135,20 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         if verbose > 0:
             print('Searching for Replacements')
 
-        loss_fkt = Repl_loss_fkt(self.regr_poly, y)
+        if len(X) > 100:
+            sub_idxs = np.arange(len(X))
+            np.random.shuffle(sub_idxs)
+            sub_idxs = sub_idxs[:100]
+
+            X_sub = X[sub_idxs]
+            y_sub = y[sub_idxs]
+        else:
+            X_sub = X
+            y_sub = y
+
+        loss_fkt = Repl_loss_fkt(self.regr_poly, y_sub)
         params = {
-            'X' : X,
+            'X' : X_sub,
             'n_outps' : 1,
             'loss_fkt' : loss_fkt,
             'k' : 0,
