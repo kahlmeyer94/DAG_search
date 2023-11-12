@@ -2161,7 +2161,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
             
             self.regr_poly.fit(X_new, y)
-            expr = utils.round_floats(self.regr_poly.model())
+            expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
 
             # translate back
             expr = self._translate(X, repl_idx, expr, repl_expr)
