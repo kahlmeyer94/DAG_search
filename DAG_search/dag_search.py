@@ -2162,6 +2162,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         }
         res = exhaustive_search(**params)
 
+        loss_fkt = Repl_loss_fkt(self.regr_poly, y)
         if (res['losses'][0] < 1e-20):
             # we solved it using a polynomial
             if verbose > 0:
