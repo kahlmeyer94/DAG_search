@@ -2135,10 +2135,10 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         if verbose > 0:
             print('Searching for Replacements')
 
-        if len(X) > 100:
+        if len(X) > 500:
             sub_idxs = np.arange(len(X))
             np.random.shuffle(sub_idxs)
-            sub_idxs = sub_idxs[:100]
+            sub_idxs = sub_idxs[:500]
 
             X_sub = X[sub_idxs]
             y_sub = y[sub_idxs]
