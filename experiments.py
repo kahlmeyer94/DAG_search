@@ -61,7 +61,7 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
             y_part = y_train[:, idx]
 
             s_time = timer()
-            regressor.fit(X_train, y_part)
+            regressor.fit(X_train, y_part, verbose = 2)
             e_time = timer()
             all_times.append(e_time - s_time)
 
@@ -83,6 +83,8 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
                 rec = False
             all_rec.append(rec)
 
+            print(f'Recovery: {rec}')
+
     
         results[problem] = {
             'recovery' : all_rec,
@@ -93,7 +95,6 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
             'pred_test' : all_pred_test,
             'times' : all_times
         }
-        print(results[problem]['recovery'])
 
         with open(save_path, 'wb') as handle:
             pickle.dump(results, handle)
@@ -698,11 +699,12 @@ if __name__ == '__main__':
         fdc_experiment('Nguyen')
         fdc_experiment('Univ')
 
-    # recovery experiment
+    # Recovery experiment
     if True:
         overwrite = True
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
+        problems = ['Strogatz', 'Nguyen', 'Univ', 'Feynman']
         regs = {
             #'linreg' : (regressors.LinReg(), True),
             #'polyreg2' : (regressors.PolyReg(degree= 2), True),
@@ -713,7 +715,7 @@ if __name__ == '__main__':
             #'dsr' : (regressors.DSR(), True),
             #'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
             #'DAGSearch_grad' : (dag_search.SimplificationRegressor(processes = 32, random_state = rand_state), True), 
-            'DAGSearch_poly' : (dag_search.PolySubRegressor(processes = 16, random_state = rand_state), True), 
+            'DAGSearch_poly' : (dag_search.PolySubRegressor(processes = 32, random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
