@@ -267,8 +267,10 @@ class Repl_loss_fkt(DAG_Loss_fkt):
                 if np.all(np.isreal(x_repl) & np.isfinite(x_repl)): 
                     losses = []
                     combs = []
-                    for i in range(1, len(used_idxs) + 1):
-                        combs += [list(x) for x in itertools.combinations(used_idxs, i)]
+                    combs += [list(x) for x in itertools.combinations(used_idxs, 1)] # single
+                    combs += [used_idxs] # all
+                    #for i in range(1, len(used_idxs) + 1):
+                    #    combs += [list(x) for x in itertools.combinations(used_idxs, i)]
                     for repl_comb in combs:
                         X_new = np.column_stack([x_repl, np.delete(X, repl_comb, axis = 1)])
                         try:
