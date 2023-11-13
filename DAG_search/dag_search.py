@@ -2086,7 +2086,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 3, max_orders:int = int(1e5), processes:int = 1):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 3, max_orders:int = int(1e5), max_samples:int = 500, max_degree:int = 7, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2094,6 +2094,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.simpl_nodes = simpl_nodes
         self.max_orders = max_orders
         self.topk = topk
+        self.max_samples = max_samples
+        self.max_degree = max_degree
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         if self.random_state is not None:
@@ -2103,8 +2105,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         
         # fitting poly
         fit_thresh = 1-1e-3
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        polydegrees = np.arange(1, 5, 1)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+        polydegrees = np.arange(1, self.max_degree, 1)
         test_r2s = []
         found = False
         for degree in polydegrees:
@@ -2127,10 +2129,10 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         if verbose > 0:
             print('Searching for Replacements')
 
-        if len(X) > 100:
+        if len(X) > self.max_samples:
             sub_idxs = np.arange(len(X))
             np.random.shuffle(sub_idxs)
-            sub_idxs = sub_idxs[:100]
+            sub_idxs = sub_idxs[:self.max_samples]
 
             X_sub = X[sub_idxs]
             y_sub = y[sub_idxs]
@@ -2155,84 +2157,51 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         res = exhaustive_search(**params)
 
         loss_fkt = Repl_loss_fkt(self.regr_poly, y)
-        if (res['losses'][0] < 1e-20):
-            # we solved it using a polynomial
-            if verbose > 0:
-                print('Solving with Polynomial')
-            graph = res['graphs'][0]
-            repl_expr = graph.evaluate_symbolic()[0]
-            repl_idx = loss_fkt(X, graph, [], True)
+        scores = []
+        exprs = []
 
-            if repl_idx is not None:
-                X_new = np.delete(X, repl_idx, axis = 1)
-                X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
-            else:
-                X_new = X
-
-            self.regr_poly.fit(X_new, y)
-            expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
-
-            # translate back
-            expr = self._translate(X, repl_idx, expr, repl_expr)
-            
+        # Solving using the polynomial
+        if verbose > 0:
+            print('Solving with Polynomial')
+        graph = res['graphs'][0]
+        repl_expr = graph.evaluate_symbolic()[0]
+        repl_idx = loss_fkt(X, graph, [], True)
+        if repl_idx is not None:
+            X_new = np.delete(X, repl_idx, axis = 1)
+            X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
         else:
-            # we couldnt solve it, try the best replacements + original problem
+            X_new = X
+        self.regr_poly.fit(X_new, y)
+        
+        pred = self.regr_poly.predict(X_new)
+        score = r2_score(y, pred)
+        if verbose > 0:
+            print(f'Score: {score}')
+        scores.append(score)
+        
+        expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
+        expr = self._translate(X, repl_idx, expr, repl_expr)
+        exprs.append(expr)
+
+        if scores[-1] < 1-1e10:
+            # Solving using the Symbolic Regressor
             if verbose > 0:
                 print('Solving with Symbolic Regressor')
-            scores = []
-            exprs = []
-            found = False
-            for graph in res['graphs']:
-                repl_expr = graph.evaluate_symbolic()[0]
-                repl_idx = loss_fkt(X, graph, [], True)
+            self.regr_search.fit(X, y, verbose = verbose)
 
-                if verbose > 1:
-                    print(f'Replacement: {repl_expr}\nIndices: {repl_idx}')
-                
-                if repl_idx is not None:
-                    X_new = np.delete(X, repl_idx, axis = 1)
-                    X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
-                else:
-                    X_new = X
+            pred = self.regr_search.predict(X)
+            score = r2_score(y, pred)
+            if verbose > 0:
+                print(f'Score: {score}')
+            scores.append(score)
+            
 
-                self.regr_search.fit(X_new, y, verbose = verbose)
+            expr = self.regr_search.model()
+            exprs.append(expr)
 
-                expr = self.regr_search.model()
-                exprs.append(expr)
-
-                
-                pred = self.regr_search.predict(X_new)
-                score = r2_score(y, pred)
-                scores.append(score)
-
-                if score == 1.0:
-                    # we found the solution
-                    found = True
-                    break
-
-            best_idx = np.argmax(scores)
-            repl_expr = res['graphs'][best_idx].evaluate_symbolic()[0]
-            repl_idx = loss_fkt(X, graph, [], True)
-            expr = exprs[best_idx]
-            if repl_idx is not None:
-                expr = self._translate(X, repl_idx, expr, repl_expr)
-
-
-            if not found:
-                # also try original problem
-                
-                if verbose > 1:
-                    print(f'Original Problem')
-                self.regr_search.fit(X, y, verbose = verbose)
-                pred = self.regr_search.predict(X)
-                score = r2_score(y, pred)
-                if score > scores[best_idx]:
-                    expr = self.regr_search.model()
-
-
-
-
-        self.expr = expr
+        best_idx = np.argmin(scores)
+  
+        self.expr = exprs[best_idx]
         x_symbs = [f'x_{i}' for i in range(X.shape[1])]
         self.exec_func = sympy.lambdify(x_symbs, self.expr)
          
