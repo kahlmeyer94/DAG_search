@@ -232,13 +232,6 @@ class Repl_loss_fkt(DAG_Loss_fkt):
         self.regr = regr
         self.y = y
         
-        self.test_perc = test_perc
-        self.test_amount = int(self.test_perc*len(y))
-        assert self.test_amount > 0, f'Too little data for test share of {self.test_perc}'
-        all_idxs = np.arange(len(self.y))
-        np.random.shuffle(all_idxs)
-        self.test_idxs = all_idxs[:self.test_amount]
-        self.train_idxs = all_idxs[self.test_amount:]
         
     def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray, return_idx:bool = False) -> np.ndarray:
         '''
@@ -273,9 +266,9 @@ class Repl_loss_fkt(DAG_Loss_fkt):
                     for repl_comb in combs:
                         X_new = np.column_stack([x_repl, np.delete(X, repl_comb, axis = 1)])
                         try:
-                            self.regr.fit(X_new[self.train_idxs], self.y[self.train_idxs])
-                            pred = self.regr.predict(X_new[self.test_idxs])
-                            loss = 1 - r2_score(self.y[self.test_idxs], pred)
+                            self.regr.fit(X_new, self.y)
+                            pred = self.regr.predict(X_new)
+                            loss = 1 - r2_score(self.y, pred)
                         except (np.linalg.LinAlgError, ValueError):
                             loss = np.inf
                         losses.append(loss)
