@@ -23,9 +23,6 @@ from DAG_search import comp_graph
 from DAG_search import utils
 
 
-# TODO: remove
-from timeit import default_timer as timer
-
 ########################
 # Loss Functions + Optimizing constants
 ########################
@@ -2171,9 +2168,12 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             repl_expr = graph.evaluate_symbolic()[0]
             repl_idx = loss_fkt(X, graph, [], True)
 
-            X_new = np.delete(X, repl_idx, axis = 1)
-            X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
-            
+            if repl_idx is not None:
+                X_new = np.delete(X, repl_idx, axis = 1)
+                X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
+            else:
+                X_new = X
+
             self.regr_poly.fit(X_new, y)
             expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
 
@@ -2194,8 +2194,11 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 if verbose > 1:
                     print(f'Replacement: {repl_expr}\nIndices: {repl_idx}')
                 
-                X_new = np.delete(X, repl_idx, axis = 1)
-                X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
+                if repl_idx is not None:
+                    X_new = np.delete(X, repl_idx, axis = 1)
+                    X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
+                else:
+                    X_new = X
 
                 self.regr_search.fit(X_new, y, verbose = verbose)
 
