@@ -2183,7 +2183,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         expr = self._translate(X, repl_idx, expr, repl_expr)
         exprs.append(expr)
 
-        if scores[-1] < 1-1e10:
+
+        if scores[-1] < (1-1e-20):
             # Solving using the Symbolic Regressor
             if verbose > 0:
                 print('Solving with Symbolic Regressor')
