@@ -2210,7 +2210,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             expr = self.regr_search.model()
             exprs.append(expr)
 
-        best_idx = np.argmin(scores)
+        best_idx = np.argmax(scores)
   
         self.expr = exprs[best_idx]
         x_symbs = [f'x_{i}' for i in range(X.shape[1])]
