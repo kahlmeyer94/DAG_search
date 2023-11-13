@@ -14,7 +14,7 @@ import multiprocessing
 from copy import deepcopy
 import sklearn
 
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import train_test_split
 
@@ -2095,7 +2095,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 3, max_orders:int = int(1e5), max_samples:int = 500, max_degree:int = 7, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_samples:int = 500, max_degree:int = 7, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2113,7 +2113,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
         
         # fitting poly
-        fit_thresh = 1-1e-3
+        fit_thresh = 1-(1e-10)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
         polydegrees = np.arange(1, self.max_degree, 1)
         test_r2s = []
