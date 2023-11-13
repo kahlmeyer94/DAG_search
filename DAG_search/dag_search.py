@@ -1779,9 +1779,9 @@ def find_best_substitutions(X:np.ndarray, y:np.ndarray, regr_bb, verbose:int = 2
 
     return final_beam, final_losses
 
-class PolyReg():
+class BaseReg():
     '''
-    Regressor based on Polynomial Regression
+    Regressor based on Regression of Base functions
     '''
     def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
         self.degree = degree
@@ -1799,12 +1799,16 @@ class PolyReg():
         else:
             self.X = X.copy()
         X_poly = self.poly.fit_transform(self.X)
-        self.regr.fit(X_poly, self.y)
+        X_trig = np.column_stack([np.sin(self.X), np.cos(self.X)])
+        X_all = np.column_stack([X_poly, X_trig])
+        self.regr.fit(X_all, self.y)
 
     def predict(self, X):
         assert self.X is not None
         X_poly = self.poly.fit_transform(X)
-        pred = self.regr.predict(X_poly)
+        X_trig = np.column_stack([np.sin(X), np.cos(X)])
+        X_all = np.column_stack([X_poly, X_trig])
+        pred = self.regr.predict(X_all)
         return pred
 
     def model(self):
@@ -1820,9 +1824,14 @@ class PolyReg():
                 for i in idxs:
                     prod = prod*names[i]
                 X_poly.append(prod)
+        X_trig = []
+        for i in range(self.X.shape[1]):
+            X_trig.append(sympy.sin(names[i]))
+        for i in range(self.X.shape[1]):
+            X_trig.append(sympy.cos(names[i]))
 
         expr = self.regr.intercept_
-        for x_name, alpha in zip(X_poly, self.regr.coef_):
+        for x_name, alpha in zip(X_poly + X_trig, self.regr.coef_):
             expr += alpha*x_name
         return expr
 
@@ -2110,7 +2119,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         test_r2s = []
         found = False
         for degree in polydegrees:
-            regr_poly = PolyReg(degree = degree)
+            regr_poly = BaseReg(degree = degree)
             regr_poly.fit(X_train, y_train)
             pred = regr_poly.predict(X_test)
             s = r2_score(y_test, pred)
