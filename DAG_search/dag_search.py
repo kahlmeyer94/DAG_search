@@ -1533,7 +1533,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(5e5), random_state:int = None, processes:int = 1, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -2095,7 +2095,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_samples:int = 500, max_degree:int = 7, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_samples:int = 500, max_degree:int = 4, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2113,7 +2113,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
         
         # fitting poly
-        fit_thresh = 1-(1e-10)
+        fit_thresh = 1-(1e-20)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
         polydegrees = np.arange(1, self.max_degree, 1)
         test_r2s = []
@@ -2175,6 +2175,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         graph = res['graphs'][0]
         repl_expr = graph.evaluate_symbolic()[0]
         repl_idx = loss_fkt(X, graph, [], True)
+
         if repl_idx is not None:
             X_new = np.delete(X, repl_idx, axis = 1)
             X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])

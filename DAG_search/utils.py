@@ -295,7 +295,7 @@ def symb_eq(expr_est, expr_true) -> bool:
         # all kind of exotic sympy exceptions can occur here.
         return False
 
-def round_floats(ex1, round_digits:int = 3, max_v:int = 1000):
+def round_floats(ex1, round_digits:int = 3, max_v:int = 10000):
     '''
     Rounds floats within sympy expression.
 
