@@ -264,8 +264,10 @@ class Repl_loss_fkt(DAG_Loss_fkt):
                 if np.all(np.isreal(x_repl) & np.isfinite(x_repl)): 
                     losses = []
                     combs = []
-                    combs += [list(x) for x in itertools.combinations(used_idxs, 1)] # single
-                    combs += [used_idxs] # all
+                    combs += [[i] for i in used_idxs] # single
+                    if len(used_idxs) > 1:
+                        combs += [used_idxs] # all
+
                     #for i in range(1, len(used_idxs) + 1):
                     #    combs += [list(x) for x in itertools.combinations(used_idxs, i)]
                     for repl_comb in combs:
@@ -2109,7 +2111,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         # fitting poly
         fit_thresh = 1-1e-3
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        polydegrees = np.arange(1, 7, 1)
+        polydegrees = np.arange(1, 5, 1)
         test_r2s = []
         found = False
         for degree in polydegrees:
@@ -2219,7 +2221,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             repl_expr = res['graphs'][best_idx].evaluate_symbolic()[0]
             repl_idx = loss_fkt(X, graph, [], True)
             expr = exprs[best_idx]
-            expr = self._translate(X, repl_idx, expr, repl_expr)
+            if repl_idx is not None:
+                expr = self._translate(X, repl_idx, expr, repl_expr)
 
 
             if not found:
