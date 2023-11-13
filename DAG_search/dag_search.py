@@ -2132,7 +2132,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         if found:
             self.regr_poly = regr_poly
         else:
-            self.regr_poly = PolyReg(degree = polydegrees[np.argmax(test_r2s)])
+            self.regr_poly = BaseReg(degree = polydegrees[np.argmax(test_r2s)])
 
 
         if verbose > 0:
