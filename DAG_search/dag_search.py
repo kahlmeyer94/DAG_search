@@ -1539,7 +1539,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 6, max_orders:int = int(5e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 6, max_orders:int = int(5e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, positives:list = None, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1551,6 +1551,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             stop_thresh... threshold for early stopping, set to negative value if you dont want it
             mode... one of 'exhaustive' or 'hierarchical'
             loss_fkt... loss function class
+            positives... marks which X are strictly positive
         '''
         self.k = k
         self.n_calc_nodes = n_calc_nodes
@@ -1564,6 +1565,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
         self.random_state = random_state
         self.loss_fkt = loss_fkt
+        self.positives = None
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
@@ -1574,6 +1576,8 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             processes... number of processes for evaluation
         '''
         assert len(y.shape) == 1, f'y must be 1-dimensional (current shape: {y.shape})'
+
+        self.positives = np.all(X > 0, axis = 0)
 
         if self.random_state is not None:
             np.random.seed(self.random_state)
@@ -1655,8 +1659,18 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         Evaluates symbolic expression.
         '''
         assert hasattr(self, 'cgraph'), 'No graph found yet. Call .fit first!'
-        exprs = self.cgraph.evaluate_symbolic(c = self.consts)
-        return exprs[0]
+        expr = self.cgraph.evaluate_symbolic(c = self.consts)[0]
+
+        if self.positives is not None:
+            transl_dict = {}
+            for s in expr.free_symbols:
+                idx = int(str(s).split('_')[-1])
+                if self.positives[idx]:
+                    transl_dict[s] = sympy.Symbol(f'x_{idx}', real = True, positive = True)
+                else:
+                    transl_dict[s] = sympy.Symbol(f'x_{idx}', real = True)
+            expr = expr.subs(transl_dict)
+        return expr
 
     def complexity(self):
         '''
@@ -2225,6 +2239,16 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             best_idx = -1
         
         self.expr = exprs[best_idx]
+        positives = np.all(X > 0, axis = 0)
+        transl_dict = {}
+        for s in self.expr.free_symbols:
+            idx = int(str(s).split('_')[-1])
+            if positives[idx]:
+                transl_dict[s] = sympy.Symbol(f'x_{idx}', real = True, positive = True)
+            else:
+                transl_dict[s] = sympy.Symbol(f'x_{idx}', real = True)
+        self.expr = self.expr.subs(transl_dict)
+        
         x_symbs = [f'x_{i}' for i in range(X.shape[1])]
         self.exec_func = sympy.lambdify(x_symbs, self.expr)
          
