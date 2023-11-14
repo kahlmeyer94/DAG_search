@@ -840,76 +840,83 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
             ops... list of ops that were tried
     '''
 
-    
-    bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
-    un_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 1]
-
-    outp_nodes = [m + k + i for i in range(n)]
-    op_spaces = []
-
-    transl_dict = {}
-    for i, (node, parents) in enumerate(order):
-        if len(parents) == 2:
-            op_spaces.append(bin_ops)
-        else:
-            if node in outp_nodes:
-                op_spaces.append(un_ops)
-            else:
-                op_spaces.append([op for op in un_ops if op != '='])
-        transl_dict[node] = i            
-
+    evaluate = True
+    if loss_thresh is not None:
+        # we are in parallel mode
+        global stop_var
+        evaluate = not bool(stop_var)
+        
     ret_consts = []
     ret_losses = []
     ret_ops = []
 
-    cgraph = None
+    if evaluate:
+        bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
+        un_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 1]
 
-    inv_array = []
-    inv_mask = []
-    for ops in itertools.product(*op_spaces):
+        outp_nodes = [m + k + i for i in range(n)]
+        op_spaces = []
 
-        if len(inv_array) > 0:
-            num_ops = np.array([config.NODE_ID[op] for op in ops])
-            is_inv = np.sum((inv_array - num_ops)*inv_mask, axis = 1)
-            is_inv = np.any(is_inv == 0)
-        else:
-            is_inv = False
-
-        if not is_inv:
-            if cgraph is None:
-                cgraph = build_dag(order, ops, m, n, k)
+        transl_dict = {}
+        for i, (node, parents) in enumerate(order):
+            if len(parents) == 2:
+                op_spaces.append(bin_ops)
             else:
-                cgraph = adapt_ops(cgraph, order, ops)
+                if node in outp_nodes:
+                    op_spaces.append(un_ops)
+                else:
+                    op_spaces.append([op for op in un_ops if op != '='])
+            transl_dict[node] = i            
 
-            consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
+        
 
-            if loss >= 1000 or (not np.isfinite(loss)):
-                evaluate = True
-                if loss_thresh is not None:
-                    # we are in parallel mode
-                    global stop_var
-                    evaluate = not bool(stop_var)
-                if evaluate:
-                    # check for nonfinites
-                    nonfins = cgraph.get_invalids(X, consts)
-                    if (len(nonfins) < len(op_spaces)) and (len(nonfins) > 0):
-                        tmp = np.zeros(len(op_spaces))
-                        for node_idx in nonfins:
-                            idx = transl_dict[node_idx]
-                            tmp[idx] = config.NODE_ID[ops[idx]]
-                        if len(inv_array) == 0:
-                            inv_array = tmp.reshape(1, -1)
-                        else:
-                            inv_array = np.row_stack([inv_array, tmp])
-                        inv_mask = (inv_array > 0).astype(int)
-                
+        cgraph = None
+
+        inv_array = []
+        inv_mask = []
+        for ops in itertools.product(*op_spaces):
+
+            if len(inv_array) > 0:
+                num_ops = np.array([config.NODE_ID[op] for op in ops])
+                is_inv = np.sum((inv_array - num_ops)*inv_mask, axis = 1)
+                is_inv = np.any(is_inv == 0)
+            else:
+                is_inv = False
+
+            if not is_inv:
+                if cgraph is None:
+                    cgraph = build_dag(order, ops, m, n, k)
+                else:
+                    cgraph = adapt_ops(cgraph, order, ops)
+
+                consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
+
+                if loss >= 1000 or (not np.isfinite(loss)):
+                    evaluate = True
+                    if loss_thresh is not None:
+                        # we are in parallel mode
+                        evaluate = not bool(stop_var)
+                    if evaluate:
+                        # check for nonfinites
+                        nonfins = cgraph.get_invalids(X, consts)
+                        if (len(nonfins) < len(op_spaces)) and (len(nonfins) > 0):
+                            tmp = np.zeros(len(op_spaces))
+                            for node_idx in nonfins:
+                                idx = transl_dict[node_idx]
+                                tmp[idx] = config.NODE_ID[ops[idx]]
+                            if len(inv_array) == 0:
+                                inv_array = tmp.reshape(1, -1)
+                            else:
+                                inv_array = np.row_stack([inv_array, tmp])
+                            inv_mask = (inv_array > 0).astype(int)
+                    
 
 
-            ret_consts.append(consts)
-            ret_losses.append(loss)
-            ret_ops.append(ops)
-        else:
-            pass
+                ret_consts.append(consts)
+                ret_losses.append(loss)
+                ret_ops.append(ops)
+            else:
+                pass
     return ret_consts, ret_losses, ret_ops
 
 def evaluate_build_order_old(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid', loss_thresh:float = None) -> tuple:
