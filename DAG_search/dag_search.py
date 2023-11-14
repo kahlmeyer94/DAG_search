@@ -256,13 +256,12 @@ class Repl_loss_fkt(DAG_Loss_fkt):
                 x_repl = cgraph.evaluate(X, np.array([]))[:, 0]
                 if np.all(np.isreal(x_repl) & np.isfinite(x_repl)): 
                     losses = []
-                    combs = []
-                    combs += [[i] for i in used_idxs] # single
-                    if len(used_idxs) > 1:
-                        combs += [used_idxs] # all
-
+                    combs = [[i] for i in used_idxs] # single
+                    #if len(used_idxs) > 1:
+                    #    combs += [used_idxs] # all
                     #for i in range(1, len(used_idxs) + 1):
                     #    combs += [list(x) for x in itertools.combinations(used_idxs, i)]
+
                     for repl_comb in combs:
                         X_new = np.column_stack([x_repl, np.delete(X, repl_comb, axis = 1)])
                         try:
@@ -1533,7 +1532,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(5e5), random_state:int = None, processes:int = 1, max_samples:int = 100, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 6, max_orders:int = int(5e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1542,6 +1541,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             random_state... for reproducibility
             processes... number of processes for multiprocessing
             max_samples... maximum number of samples on which to fit
+            stop_thresh... threshold for early stopping, set to negative value if you dont want it
             mode... one of 'exhaustive' or 'hierarchical'
             loss_fkt... loss function class
         '''
@@ -1551,6 +1551,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.max_samples = max_samples
         assert mode in ['exhaustive', 'hierarchical'], f'Search mode {mode} is not supported.'
         self.mode = mode
+        self.stop_thresh = stop_thresh
 
         self.processes = max(min(processes, multiprocessing.cpu_count()), 1)
 
@@ -1595,7 +1596,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'opt_mode' : 'grid_zoom',
             'verbose' : verbose,
             'max_orders' : self.max_orders, 
-            'stop_thresh' : 1e-10
+            'stop_thresh' : self.stop_thresh
         }
         if self.mode == 'hierarchical':
             res = hierarchical_search(**params)
@@ -2095,7 +2096,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 4, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2210,8 +2211,12 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             expr = self.regr_search.model()
             exprs.append(expr)
 
-        best_idx = np.argmax(scores)
-  
+
+        if utils.tree_size(exprs[0]) < 50:
+            best_idx = np.argmax(scores)
+        else:
+            best_idx = -1
+        
         self.expr = exprs[best_idx]
         x_symbs = [f'x_{i}' for i in range(X.shape[1])]
         self.exec_func = sympy.lambdify(x_symbs, self.expr)
