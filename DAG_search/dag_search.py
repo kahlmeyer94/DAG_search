@@ -1539,7 +1539,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, positives:list = None, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, positives:list = None, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -2136,14 +2136,17 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
 
         # check for polynomial
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
         polydegrees = np.arange(1, max(7, self.max_degree), 1)
         found = False
         for degree in polydegrees:
             self.regr_poly = BaseReg(degree = degree)
-            self.regr_poly.fit(X, y)
-            pred = self.regr_poly.predict(X)
-            s = r2_score(y, pred)
-            if s == 1.0:
+            self.regr_poly.fit(X_train, y_train)
+            pred_train = self.regr_poly.predict(X_train)
+            s_train = r2_score(y_train, pred_train)
+            pred_test = self.regr_poly.predict(X_test)
+            s_test = r2_score(y_test, pred_test)
+            if s_train == 1.0 and s_test == 1.0:
                 found = True
                 break
 
@@ -2211,19 +2214,23 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                     X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
                 else:
                     X_new = X
+                X_train, X_test, y_train, y_test = train_test_split(X_new, y, test_size=0.1, random_state=42)
 
 
                 # fit using polynomial
-                self.regr_poly.fit(X_new, y)
-                pred = self.regr_poly.predict(X_new)
-                score = r2_score(y, pred)
-                scores.append(score)
+                self.regr_poly.fit(X_train, y_train)
+                pred_train = self.regr_poly.predict(X_train)
+                score_train = r2_score(y_train, pred_train)
+                pred_test = self.regr_poly.predict(X_test)
+                score_test = r2_score(y_test, pred_test)
+
+                scores.append(score_test)
                 expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
                 expr = self._translate(X, repl_idx, expr, repl_expr)
                 exprs.append(expr)
                 if verbose > 0:
-                    print(f'Poly: {score}')
-                if scores[-1] == 1.0:
+                    print(f'Poly: {score_test}')
+                if score_train == 1.0 and score_test == 1.0:
                     if verbose > 0:
                         print(f'Expression is a polynomial on a substitution')
                         print(expr)
@@ -2231,19 +2238,18 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                     break
 
                 # fit using symbolic regressor
-                if verbose > 0:
-                    print(f'Replacement: Original Problem')
-
-                self.regr_search.fit(X_new, y, verbose = verbose)
-                pred = self.regr_search.predict(X_new)
-                score = r2_score(y, pred)
-                scores.append(score)
+                self.regr_search.fit(X_train, y_train, verbose = verbose)
+                pred_train = self.regr_search.predict(X_train)
+                pred_test = self.regr_search.predict(X_test)
+                score_train = r2_score(y_train, pred_train)
+                score_test = r2_score(y_test, pred_test)
+                scores.append(score_test)
                 expr = self.regr_search.model()
                 expr = self._translate(X, repl_idx, expr, repl_expr)
                 exprs.append(expr)
                 if verbose > 0:
-                    print(f'DAG: {score}')
-                if scores[-1] == 1.0:
+                    print(f'DAG: {score_test}')
+                if score_train == 1.0 and score_test == 1.0:
                     if verbose > 0:
                         print(f'Expression found trough exhaustive search with a substitution')
                         print(expr)
@@ -2253,6 +2259,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
             if not found:
                 # fit original problem using symbolic regressor
+                if verbose > 0:
+                    print(f'Replacement: Original Problem')
                 self.regr_search.fit(X, y, verbose = verbose)
                 pred = self.regr_search.predict(X)
                 score = r2_score(y, pred)

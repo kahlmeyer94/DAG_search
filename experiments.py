@@ -40,6 +40,7 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
     problems = list(task_dict.keys())
 
     for problem in problems:
+
         print('####################')
         print(f'{regressor_name} on {problem}')
         print('####################')
@@ -704,7 +705,9 @@ if __name__ == '__main__':
         overwrite = True
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        problems = ['Strogatz', 'Nguyen', 'Feynman', 'Univ']
+        problems = ['Nguyen', 'Strogatz', 'Feynman', 'Univ']
+
+        problems = ['Feynman', 'Univ']
         regs = {
             #'linreg' : (regressors.LinReg(), True),
             #'polyreg2' : (regressors.PolyReg(degree= 2), True),
