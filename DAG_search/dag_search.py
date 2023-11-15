@@ -1881,11 +1881,11 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
             polydegrees = np.arange(1, 5, 1)
             test_r2s = []
             for degree in polydegrees:
-                regr_bb = PolyReg(degree = degree)
+                regr_bb = BaseReg(degree = degree)
                 regr_bb.fit(X_train, y_train)
                 pred = regr_bb.predict(X_test)
                 test_r2s.append(r2_score(y_test, pred))
-            self.regr_blackbox = PolyReg(degree = polydegrees[np.argmax(test_r2s)])
+            self.regr_blackbox = BaseReg(degree = polydegrees[np.argmax(test_r2s)])
 
 
         if verbose > 0:
