@@ -1539,7 +1539,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 6, max_orders:int = int(5e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, positives:list = None, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 4, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, positives:list = None, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -2117,7 +2117,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 3, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, max_tree_size = 50, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2127,118 +2127,157 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.topk = topk
         self.max_samples = max_samples
         self.max_degree = max_degree
+        self.max_tree_size = max_tree_size
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         if self.random_state is not None:
             np.random.seed(self.random_state)
         if self.regr_search is None:
             self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
-        
-        # fitting poly
-        fit_thresh = 1-(1e-20)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
-        polydegrees = np.arange(1, self.max_degree, 1)
-        test_r2s = []
+
+        # check for polynomial
+        polydegrees = np.arange(1, max(7, self.max_degree), 1)
         found = False
         for degree in polydegrees:
-            regr_poly = BaseReg(degree = degree)
-            regr_poly.fit(X_train, y_train)
-            pred = regr_poly.predict(X_test)
-            s = r2_score(y_test, pred)
-            if s > fit_thresh:
+            self.regr_poly = BaseReg(degree = degree)
+            self.regr_poly.fit(X, y)
+            pred = self.regr_poly.predict(X)
+            s = r2_score(y, pred)
+            if s == 1.0:
                 found = True
                 break
-            else:
-                test_r2s.append(s)
-        
+
         if found:
-            self.regr_poly = regr_poly
-        else:
-            self.regr_poly = BaseReg(degree = polydegrees[np.argmax(test_r2s)])
-
-
-        if verbose > 0:
-            print('Searching for Replacements')
-
-        if len(X) > self.max_samples:
-            sub_idxs = np.arange(len(X))
-            np.random.shuffle(sub_idxs)
-            sub_idxs = sub_idxs[:self.max_samples]
-
-            X_sub = X[sub_idxs]
-            y_sub = y[sub_idxs]
-        else:
-            X_sub = X
-            y_sub = y
-
-        loss_fkt = Repl_loss_fkt(self.regr_poly, y_sub)
-        params = {
-            'X' : X_sub,
-            'n_outps' : 1,
-            'loss_fkt' : loss_fkt,
-            'k' : 0,
-            'n_calc_nodes' : self.simpl_nodes,
-            'n_processes' : self.processes,
-            'topk' : self.topk,
-            'opt_mode' : 'grid_zoom',
-            'verbose' : verbose,
-            'max_orders' : self.max_orders, 
-            'stop_thresh' : 1e-20
-        }
-        res = exhaustive_search(**params)
-
-        loss_fkt = Repl_loss_fkt(self.regr_poly, y)
-        scores = []
-        exprs = []
-
-        # Solving using the polynomial
-        if verbose > 0:
-            print('Solving with Polynomial')
-        graph = res['graphs'][0]
-        repl_expr = graph.evaluate_symbolic()[0]
-        repl_idx = loss_fkt(X, graph, [], True)
-
-        if repl_idx is not None:
-            X_new = np.delete(X, repl_idx, axis = 1)
-            X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
-        else:
-            X_new = X
-        self.regr_poly.fit(X_new, y)
-        
-        pred = self.regr_poly.predict(X_new)
-        score = r2_score(y, pred)
-        if verbose > 0:
-            print(f'Score: {score}')
-        scores.append(score)
-        
-        expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
-        expr = self._translate(X, repl_idx, expr, repl_expr)
-        exprs.append(expr)
-
-
-        if scores[-1] < (1-1e-20):
-            # Solving using the Symbolic Regressor
+            # Our problem was a polynomial
             if verbose > 0:
-                print('Solving with Symbolic Regressor')
-            self.regr_search.fit(X, y, verbose = verbose)
+                print('Expression is a polynomial')
+            self.expr = self.regr_poly.model()
+        else:
+            # Search for substitutions that simplify the problem
+            self.regr_poly = BaseReg(degree = self.max_degree)
 
-            pred = self.regr_search.predict(X)
-            score = r2_score(y, pred)
             if verbose > 0:
-                print(f'Score: {score}')
-            scores.append(score)
+                print('Searching for Replacements')
+
+            # for speedup, only on subset of samples
+            if len(X) > self.max_samples:
+                sub_idxs = np.arange(len(X))
+                np.random.shuffle(sub_idxs)
+                sub_idxs = sub_idxs[:self.max_samples]
+                X_sub = X[sub_idxs]
+                y_sub = y[sub_idxs]
+            else:
+                X_sub = X
+                y_sub = y
+
+            loss_fkt = Repl_loss_fkt(self.regr_poly, y_sub)
+            params = {
+                'X' : X_sub,
+                'n_outps' : 1,
+                'loss_fkt' : loss_fkt,
+                'k' : 0,
+                'n_calc_nodes' : self.simpl_nodes,
+                'n_processes' : self.processes,
+                'topk' : self.topk,
+                'opt_mode' : 'grid_zoom',
+                'verbose' : verbose,
+                'max_orders' : self.max_orders, 
+                'stop_thresh' : 1e-20
+            }
+            res = exhaustive_search(**params)
+
+
             
 
-            expr = self.regr_search.model()
-            exprs.append(expr)
+            # try top simplifications
+            loss_fkt = Repl_loss_fkt(self.regr_poly, y)
+            scores = []
+            exprs = []
+
+            
+            if verbose > 0:
+                print('Iterating trough best replacements')
+
+            for graph in res['graphs']:
+                repl_expr = graph.evaluate_symbolic()[0]
+                repl_idx = loss_fkt(X, graph, [], True)
+
+                
+                if verbose > 0:
+                    print(f'Replacement: x_{repl_idx} -> {repl_expr}')
+
+                if repl_idx is not None:
+                    X_new = np.delete(X, repl_idx, axis = 1)
+                    X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
+                else:
+                    X_new = X
 
 
-        if utils.tree_size(exprs[0]) < 50:
-            best_idx = np.argmax(scores)
-        else:
-            best_idx = -1
+                # fit using polynomial
+                self.regr_poly.fit(X_new, y)
+                pred = self.regr_poly.predict(X_new)
+                score = r2_score(y, pred)
+                scores.append(score)
+                expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
+                expr = self._translate(X, repl_idx, expr, repl_expr)
+                exprs.append(expr)
+                if verbose > 0:
+                    print(f'Poly: {score}')
+                if scores[-1] == 1.0:
+                    if verbose > 0:
+                        print(f'Expression is a polynomial on a substitution')
+                        print(expr)
+                    found = True
+                    break
+
+                # fit using symbolic regressor
+                if verbose > 0:
+                    print(f'Replacement: Original Problem')
+
+                self.regr_search.fit(X_new, y, verbose = verbose)
+                pred = self.regr_search.predict(X_new)
+                score = r2_score(y, pred)
+                scores.append(score)
+                expr = self.regr_search.model()
+                expr = self._translate(X, repl_idx, expr, repl_expr)
+                exprs.append(expr)
+                if verbose > 0:
+                    print(f'DAG: {score}')
+                if scores[-1] == 1.0:
+                    if verbose > 0:
+                        print(f'Expression found trough exhaustive search with a substitution')
+                        print(expr)
+                    found = True
+                    break
+                
+
+            if not found:
+                # fit original problem using symbolic regressor
+                self.regr_search.fit(X, y, verbose = verbose)
+                pred = self.regr_search.predict(X)
+                score = r2_score(y, pred)
+                scores.append(score)
+                expr = self.regr_search.model()
+                exprs.append(expr)
+
+            # select best model with expression size < max_size
+            scores = np.array(scores)
+            sort_idx = np.argsort(-scores)
+            selected = False
+            for i in sort_idx:
+                if (scores[i] > (1-1e-20)) or (utils.tree_size(exprs[i]) < self.max_tree_size):
+                    selected = True
+                    self.expr = exprs[i]
+                    break
+                    
+            # if all expressions are not optimal and too large, take the best one
+            if not selected:
+                self.expr = exprs[np.argmax(scores)]
         
-        self.expr = exprs[best_idx]
+
+
+
+        # for equality check, make sure that variables have the right properties
         positives = np.all(X > 0, axis = 0)
         transl_dict = {}
         for s in self.expr.free_symbols:
