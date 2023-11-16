@@ -1556,7 +1556,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, positives:list = None, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, positives:list = None, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -2134,7 +2134,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 2, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, max_tree_size = 50, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 2, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2144,7 +2144,6 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.topk = topk
         self.max_samples = max_samples
         self.max_degree = max_degree
-        self.max_tree_size = max_tree_size
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         if self.random_state is not None:
@@ -2285,19 +2284,18 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 expr = self.regr_search.model()
                 exprs.append(expr)
 
-            # select best model with expression size < max_size
             scores = np.array(scores)
-            sort_idx = np.argsort(-scores)
-            selected = False
-            for i in sort_idx:
-                if (scores[i] > (1-1e-20)) or (utils.tree_size(exprs[i]) < self.max_tree_size):
-                    selected = True
-                    self.expr = exprs[i]
-                    break
-                    
-            # if all expressions are not optimal and too large, take the best one
-            if not selected:
-                self.expr = exprs[np.argmax(scores)]
+            if scores[-1] > (1-1e-20):
+                # take optimal model
+                self.expr = exprs[-1]
+            else:
+                # take smallest model with score > 0.999 or best model
+                if np.any(scores) > 0.999:
+                    exprs = [exprs[i] for i in range(len(exprs)) if scores[i] > 0.999]
+                    sizes = np.array([utils.tree_size(expr) for expr in exprs])
+                    self.expr = exprs[np.argmin(sizes)]
+                else:
+                    self.expr = exprs[np.argmax(scores)]
         
 
 
