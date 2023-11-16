@@ -2134,7 +2134,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 2, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 2, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 2, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search

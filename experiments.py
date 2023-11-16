@@ -706,8 +706,6 @@ if __name__ == '__main__':
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         problems = ['Nguyen', 'Strogatz', 'Feynman', 'Univ']
-
-        problems = ['Feynman', 'Univ']
         regs = {
             #'linreg' : (regressors.LinReg(), True),
             #'polyreg2' : (regressors.PolyReg(degree= 2), True),
