@@ -819,7 +819,7 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
     else:
         return np.array([]), np.inf
         
-def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid', loss_thresh:float = None) -> tuple:
+def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None) -> tuple:
     '''
     Given a build order (output of get_build_orders), tests all possible assignments of operators.
 
@@ -830,7 +830,8 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
         k... number of constant nodes
         X... input for DAGs
         loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
-        opt_mode... one of {pool, opt, grid, grid_opt}
+        topk... number of top performers to be returned
+        opt_mode... one of {pool, opt, grid, grid_opt, grid_zoom} (see evaluate_cgraph function)
         loss_thresh... only set in multiprocessing context - to communicate between processes
         
     @Returns:
@@ -849,6 +850,8 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
     ret_consts = []
     ret_losses = []
     ret_ops = []
+    max_loss = np.inf
+    max_idx = None
 
     if evaluate:
         bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
@@ -911,10 +914,24 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                             inv_mask = (inv_array > 0).astype(int)
                     
 
+                if (len(ret_losses) < topk):
+                    # append
+                    ret_consts.append(consts)
+                    ret_losses.append(loss)
+                    ret_ops.append(ops)
 
-                ret_consts.append(consts)
-                ret_losses.append(loss)
-                ret_ops.append(ops)
+                    max_idx = np.argmax(ret_losses)
+                    max_loss = ret_losses[max_idx]
+                else:
+
+                    if loss < max_loss:
+                        # replace
+                        ret_consts[max_idx] = consts
+                        ret_losses[max_idx] = loss
+                        ret_ops[max_idx] = ops
+                        
+                        max_idx = np.argmax(ret_losses)
+                        max_loss = ret_losses[max_idx]
             else:
                 pass
     return ret_consts, ret_losses, ret_ops
@@ -1158,7 +1175,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         else:
             pbar = orders
         for order in pbar:
-            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, opt_mode = opt_mode)
+            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode)
             for c, loss, op in zip(consts, losses, ops):
                 
                 if loss <= loss_thresh:
@@ -1189,7 +1206,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             if early_stop:
                 break
     else:
-        args = [[order, m, n, k, X, loss_fkt, opt_mode, stop_thresh] for order in orders]
+        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh] for order in orders]
         if verbose == 2:
             pbar = tqdm(args, total = len(args))
         else:
@@ -1437,7 +1454,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             else:
                 pbar = orders
             for order in pbar:
-                consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, opt_mode = opt_mode)
+                consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode)
                 for c, loss, op in zip(consts, losses, ops):
                     
                     if loss <= loss_thresh:
@@ -1468,7 +1485,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
                 if early_stop:
                     break
         else:
-            args = [[order, m, n, k, X, loss_fkt, opt_mode, stop_thresh] for order in orders]
+            args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh] for order in orders]
             if verbose == 2:
                 pbar = tqdm(args, total = len(args))
             else:
@@ -2117,7 +2134,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 3, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, max_tree_size = 50, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 2, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 2, max_tree_size = 50, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
