@@ -2153,7 +2153,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
         # check for polynomial
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
-        polydegrees = np.arange(1, max(7, self.max_degree), 1)
+        polydegrees = np.arange(1, max(5, self.max_degree), 1)
         found = False
         for degree in polydegrees:
             self.regr_poly = BaseReg(degree = degree)
@@ -2239,8 +2239,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 score_train = r2_score(y_train, pred_train)
                 pred_test = self.regr_poly.predict(X_test)
                 score_test = r2_score(y_test, pred_test)
-
                 scores.append(score_test)
+
                 expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
                 expr = self._translate(X, repl_idx, expr, repl_expr)
                 exprs.append(expr)
@@ -2260,6 +2260,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 score_train = r2_score(y_train, pred_train)
                 score_test = r2_score(y_test, pred_test)
                 scores.append(score_test)
+
                 expr = self.regr_search.model()
                 expr = self._translate(X, repl_idx, expr, repl_expr)
                 exprs.append(expr)
@@ -2290,7 +2291,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 self.expr = exprs[-1]
             else:
                 # take smallest model with score > 0.999 or best model
-                if np.any(scores) > 0.999:
+                if np.any(scores > 0.999):
                     exprs = [exprs[i] for i in range(len(exprs)) if scores[i] > 0.999]
                     sizes = np.array([utils.tree_size(expr) for expr in exprs])
                     self.expr = exprs[np.argmin(sizes)]
