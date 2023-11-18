@@ -2146,6 +2146,9 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.max_degree = max_degree
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
+        max_tree_size = 20
+        min_fit_thresh = 0.999
+
         if self.random_state is not None:
             np.random.seed(self.random_state)
         if self.regr_search is None:
@@ -2153,7 +2156,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
         # check for polynomial
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
-        polydegrees = np.arange(1, max(5, self.max_degree), 1)
+        polydegrees = np.arange(1, max(7, self.max_degree), 1)
         found = False
         for degree in polydegrees:
             self.regr_poly = BaseReg(degree = degree)
@@ -2162,7 +2165,10 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             s_train = r2_score(y_train, pred_train)
             pred_test = self.regr_poly.predict(X_test)
             s_test = r2_score(y_test, pred_test)
-            if s_train == 1.0 and s_test == 1.0:
+
+            
+            expr = utils.simplify(utils.round_floats(self.regr_poly.model()))
+            if s_train == 1.0 and s_test == 1.0 and utils.tree_size(expr) < max_tree_size:
                 found = True
                 break
 
@@ -2243,10 +2249,11 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
                 expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
                 expr = self._translate(X, repl_idx, expr, repl_expr)
+                expr = utils.simplify(expr)
                 exprs.append(expr)
                 if verbose > 0:
                     print(f'Poly: {score_test}')
-                if score_train == 1.0 and score_test == 1.0:
+                if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
                     if verbose > 0:
                         print(f'Expression is a polynomial on a substitution')
                         print(expr)
@@ -2263,10 +2270,11 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
                 expr = self.regr_search.model()
                 expr = self._translate(X, repl_idx, expr, repl_expr)
+                expr = utils.simplify(expr)
                 exprs.append(expr)
                 if verbose > 0:
                     print(f'DAG: {score_test}')
-                if score_train == 1.0 and score_test == 1.0:
+                if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
                     if verbose > 0:
                         print(f'Expression found trough exhaustive search with a substitution')
                         print(expr)
@@ -2290,20 +2298,21 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 # take optimal model
                 self.expr = exprs[-1]
             else:
+                '''
                 # get pareto front from rankings, get model closest to 0,0 ranking
                 sizes = np.array([utils.tree_size(expr) for expr in exprs])
                 ranks1 = np.argsort(sizes)
                 ranks2 = np.argsort(-scores)
                 self.expr = exprs[np.argmin(ranks1 + ranks2)]
-
                 '''
-                if np.any(scores > 0.999):
+
+                
+                if np.any(scores > min_fit_thresh):
                     exprs = [exprs[i] for i in range(len(exprs)) if scores[i] > 0.999]
                     sizes = np.array([utils.tree_size(expr) for expr in exprs])
                     self.expr = exprs[np.argmin(sizes)]
                 else:
                     self.expr = exprs[np.argmax(scores)]
-                '''
         
 
 
