@@ -2290,8 +2290,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 # take optimal model
                 self.expr = exprs[-1]
             else:
-                # take smallest model with score > 0.999 or best model
-                # TODO: get pareto front from rankings, get model closest to 0,0 ranking
+                # get pareto front from rankings, get model closest to 0,0 ranking
                 sizes = np.array([utils.tree_size(expr) for expr in exprs])
                 ranks1 = np.argsort(sizes)
                 ranks2 = np.argsort(-scores)
