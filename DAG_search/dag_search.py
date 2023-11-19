@@ -2176,7 +2176,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             # Our problem was a polynomial
             if verbose > 0:
                 print('Expression is a polynomial')
-            self.expr = self.regr_poly.model()
+            self.expr = utils.simplify(utils.round_floats(self.regr_poly.model()))
+            self.pareto_front = [self.expr]
         else:
             # Search for substitutions that simplify the problem
             self.regr_poly = BaseReg(degree = self.max_degree)
@@ -2293,18 +2294,30 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 expr = self.regr_search.model()
                 exprs.append(expr)
 
+
             scores = np.array(scores)
             if scores[-1] > (1-1e-20):
                 # take optimal model
                 self.expr = exprs[-1]
+                self.pareto_front = [self.expr]
             else:
                 '''
-                # get pareto front from rankings, get model closest to 0,0 ranking
+                # get pareto front from rankings
+                '''
                 sizes = np.array([utils.tree_size(expr) for expr in exprs])
                 ranks1 = np.argsort(sizes)
                 ranks2 = np.argsort(-scores)
-                self.expr = exprs[np.argmin(ranks1 + ranks2)]
-                '''
+
+                pareto_idxs = [ranks1[0]] 
+                current_score = scores[ranks1[0]] # have to be greater than this
+                for i in ranks1[1:]:
+                    if scores[i] > current_score:
+                        pareto_idxs.append(i)
+                        current_score = scores[i]
+
+                self.pareto_front = [exprs[i] for i in pareto_idxs]
+
+                
 
                 
                 if np.any(scores > min_fit_thresh):
