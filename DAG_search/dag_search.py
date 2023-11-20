@@ -2146,8 +2146,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.max_degree = max_degree
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
-        max_tree_size = 20
-        min_fit_thresh = 0.999
+        max_tree_size = 30
 
         if self.random_state is not None:
             np.random.seed(self.random_state)
@@ -2320,12 +2319,13 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 
 
                 
-                if np.any(scores > min_fit_thresh):
-                    exprs = [exprs[i] for i in range(len(exprs)) if scores[i] > 0.999]
-                    sizes = np.array([utils.tree_size(expr) for expr in exprs])
-                    self.expr = exprs[np.argmin(sizes)]
-                else:
+                if np.any(sizes < max_tree_size):
+                    idxs = np.where(sizes < max_tree_size)[0]
+                    exprs = [exprs[i] for i in idxs]
+                    scores = scores[idxs]
                     self.expr = exprs[np.argmax(scores)]
+                else:
+                    self.expr = exprs[np.argmin(sizes)]
         
 
 
