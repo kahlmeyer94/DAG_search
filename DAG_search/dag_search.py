@@ -12,7 +12,7 @@ from tqdm import tqdm
 import pickle
 import multiprocessing
 from copy import deepcopy
-from timeit import default_timer as timer
+import time
 import sklearn
 import sys
 
@@ -858,7 +858,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
     max_idx = None
 
     if start_time is not None:
-        evaluate = evaluate and (timer() - start_time) < max_time
+        evaluate = evaluate and (time.time() - start_time) < max_time
 
     if evaluate:
         bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
@@ -886,7 +886,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
         inv_mask = []
         for ops in itertools.product(*op_spaces):
 
-            if (start_time is not None) and ((timer() - start_time) >= max_time):
+            if (start_time is not None) and ((time.time() - start_time) >= max_time):
                 break
             if len(inv_array) > 0:
                 num_ops = np.array([config.NODE_ID[op] for op in ops])
@@ -1093,7 +1093,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         'graphs' : [],
         'consts' : [],
         'losses' : []}
-    process_start_time = timer()
+    process_start_time = time.time()
 
     n_processes = max(min(n_processes, multiprocessing.cpu_count()), 1)
     ctx = multiprocessing.get_context('spawn')
@@ -1161,7 +1161,8 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             if early_stop:
                 break
     else:
-        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, 0.0, max_time] for order in orders]
+
+        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time] for order in orders]
         if verbose == 2:
             pbar = tqdm(args, total = len(args))
         else:
@@ -1372,7 +1373,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
         'graphs' : [],
         'consts' : [],
         'losses' : []}
-    process_start_time = timer()
+    process_start_time = time.time()
 
 
     n_processes = max(min(n_processes, multiprocessing.cpu_count()), 1)
@@ -1394,7 +1395,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
     loss_thresh = np.inf
 
     for calc_nodes in range(n_calc_nodes + 1): # 0, 1, ..., n_calc_nodes
-        setup_time = timer() - process_start_time
+        setup_time = time.time() - process_start_time
         if setup_time >= max_time:
             break
 
@@ -1450,7 +1451,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
                 if early_stop:
                     break
         else:
-            args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, 0.0, max_time- setup_time] for order in orders]
+            args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time- setup_time] for order in orders]
             if verbose == 2:
                 pbar = tqdm(args, total = len(args))
             else:
