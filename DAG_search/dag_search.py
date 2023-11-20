@@ -689,11 +689,10 @@ def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 100
     if log_its_total > np.log(max_orders):
         # just sample random orders
         possible_edges = []
-        for _ in range(max_orders):
-            order = []
-            for tmp in sample_space_edges:
-                order.append(np.random.choice(tmp))
-            possible_edges.append(order)
+        for tmp in sample_space_edges:
+            possible_edges.append(np.random.choice(tmp, size = max_orders))
+        possible_edges = np.column_stack(possible_edges)
+
     else:
         possible_edges = itertools.product(*sample_space_edges)
     valid_set = set()
