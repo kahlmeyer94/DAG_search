@@ -12,7 +12,9 @@ from tqdm import tqdm
 import pickle
 import multiprocessing
 from copy import deepcopy
+from timeit import default_timer as timer
 import sklearn
+import sys
 
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.preprocessing import PolynomialFeatures
@@ -819,7 +821,7 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
     else:
         return np.array([]), np.inf
         
-def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None) -> tuple:
+def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None, start_time:float = None, max_time:float = 3600) -> tuple:
     '''
     Given a build order (output of get_build_orders), tests all possible assignments of operators.
 
@@ -832,8 +834,10 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
         loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
         topk... number of top performers to be returned
         opt_mode... one of {pool, opt, grid, grid_opt, grid_zoom} (see evaluate_cgraph function)
-        loss_thresh... only set in multiprocessing context - to communicate between processes
-        
+        loss_thresh... only set in multiprocessing context - to communicate between processes for early stopping
+        start_time... if set, will not evaluate any orders after max_time seconds from start time
+        max_time... if set, will not evaluate any orders after max_time seconds from start time
+
     @Returns:
         tuple:
             constants... list of optimized constants
@@ -852,6 +856,9 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
     ret_ops = []
     max_loss = np.inf
     max_idx = None
+
+    if start_time is not None:
+        evaluate = evaluate and (timer() - start_time) < max_time
 
     if evaluate:
         bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
@@ -879,6 +886,8 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
         inv_mask = []
         for ops in itertools.product(*op_spaces):
 
+            if (start_time is not None) and ((timer() - start_time) >= max_time):
+                break
             if len(inv_array) > 0:
                 num_ops = np.array([config.NODE_ID[op] for op in ops])
                 is_inv = np.sum((inv_array - num_ops)*inv_mask, axis = 1)
@@ -935,66 +944,6 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
             else:
                 pass
     return ret_consts, ret_losses, ret_ops
-
-def evaluate_build_order_old(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, opt_mode:str = 'grid', loss_thresh:float = None) -> tuple:
-    '''
-    Given a build order (output of get_build_orders), tests all possible assignments of operators.
-
-    @Params:
-        order... list of tuples (node, parent_nodes)
-        m... number of input nodes
-        n... number of output nodes
-        k... number of constant nodes
-        X... input for DAGs
-        loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
-        opt_mode... one of {pool, opt, grid, grid_opt}
-        loss_thresh... only set in multiprocessing context - to communicate between processes
-        
-    @Returns:
-        tuple:
-            constants... list of optimized constants
-            losses... list of losses for DAGs
-            ops... list of ops that were tried
-    '''
-
-    
-    bin_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 2]
-    un_ops = [op for op in config.NODE_ARITY if config.NODE_ARITY[op] == 1]
-
-    outp_nodes = [m + k + i for i in range(n)]
-    op_spaces = []
-
-    for i, (node, parents) in enumerate(order):
-        if len(parents) == 2:
-            op_spaces.append(bin_ops)
-        else:
-            if node in outp_nodes:
-                op_spaces.append(un_ops)
-            else:
-                op_spaces.append([op for op in un_ops if op != '='])       
-
-    ret_consts = []
-    ret_losses = []
-    ret_ops = []
-
-    cgraph = None
-
-    for ops in itertools.product(*op_spaces):
-
-        
-        if cgraph is None:
-            cgraph = build_dag(order, ops, m, n, k)
-        else:
-            cgraph = adapt_ops(cgraph, order, ops)
-
-        consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
-   
-        ret_consts.append(consts)
-        ret_losses.append(loss)
-        ret_ops.append(ops)
-
-    return ret_consts, ret_losses, ret_ops
-
 
 def sample_graph(m:int, n:int, k:int, n_calc_nodes:int) -> comp_graph.CompGraph:
     '''
@@ -1114,7 +1063,7 @@ def is_pickleable(x:object) -> bool:
     except (pickle.PicklingError, AttributeError):
         return False
 
-def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 3600.0, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
     '''
     Exhaustive search for a DAG.
 
@@ -1129,6 +1078,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         verbose... print modus 0 = no print, 1 = status messages, 2 = progress bars
         opt_mode... method for optimizing constants, one of {pool, opt, grid, grid_opt}
         max_orders... will at most evaluate this many chosen orders
+        max_time... when this time (in seconds) has passed, no new orders are evaluated
         max_size... will only return at most this many graphs (sorted by loss)
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
         unique_loss... only take graph into topk if it has a totally new loss
@@ -1139,6 +1089,11 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             losses -> list of losses
 
     '''
+    ret = {
+        'graphs' : [],
+        'consts' : [],
+        'losses' : []}
+    process_start_time = timer()
 
     n_processes = max(min(n_processes, multiprocessing.cpu_count()), 1)
     ctx = multiprocessing.get_context('spawn')
@@ -1175,7 +1130,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         else:
             pbar = orders
         for order in pbar:
-            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode)
+            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time)
             for c, loss, op in zip(consts, losses, ops):
                 
                 if loss <= loss_thresh:
@@ -1206,7 +1161,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             if early_stop:
                 break
     else:
-        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh] for order in orders]
+        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, 0.0, max_time] for order in orders]
         if verbose == 2:
             pbar = tqdm(args, total = len(args))
         else:
@@ -1249,10 +1204,9 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         cgraph = build_dag(order, ops, m, n, k)
         top_graphs.append(cgraph.copy())
 
-    ret = {
-        'graphs' : top_graphs,
-        'consts' : top_consts,
-        'losses' : top_losses}
+    ret['graphs'] = top_graphs
+    ret['consts'] = top_consts
+    ret['losses'] = top_losses
 
     return ret
 
@@ -1387,7 +1341,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 
     return ret
 
-def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, stop_thresh:float = -1.0, hierarchy_stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 3600.0, stop_thresh:float = -1.0, hierarchy_stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
     '''
     Exhaustive search for a DAG but hierarchical.
 
@@ -1403,6 +1357,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
         opt_mode... method for optimizing constants, one of {pool, opt, grid, grid_opt}
         max_orders... will at most evaluate this many chosen orders
         max_size... will only return at most this many graphs (sorted by loss)
+        max_time... when this time (in seconds) has passed, no new orders are evaluated
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
         hierarchy_stop_thresh... if loss of any top performer is lower than this, will stop after hierarchy step
         unique_loss... only take graph into topk if it has a totally new loss
@@ -1413,6 +1368,12 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             losses -> list of losses
 
     '''
+    ret = {
+        'graphs' : [],
+        'consts' : [],
+        'losses' : []}
+    process_start_time = timer()
+
 
     n_processes = max(min(n_processes, multiprocessing.cpu_count()), 1)
     ctx = multiprocessing.get_context('spawn')
@@ -1433,6 +1394,10 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
     loss_thresh = np.inf
 
     for calc_nodes in range(n_calc_nodes + 1): # 0, 1, ..., n_calc_nodes
+        setup_time = timer() - process_start_time
+        if setup_time >= max_time:
+            break
+
         if verbose > 0:
             print('#########################')
             print(f'# Calc Nodes: {calc_nodes}')
@@ -1454,7 +1419,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             else:
                 pbar = orders
             for order in pbar:
-                consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode)
+                consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time)
                 for c, loss, op in zip(consts, losses, ops):
                     
                     if loss <= loss_thresh:
@@ -1485,7 +1450,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
                 if early_stop:
                     break
         else:
-            args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh] for order in orders]
+            args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, 0.0, max_time- setup_time] for order in orders]
             if verbose == 2:
                 pbar = tqdm(args, total = len(args))
             else:
@@ -1534,11 +1499,9 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             if verbose > 0:
                 print(f'Stopping because early stop criteria has been matched!')
             break
-
-    ret = {
-        'graphs' : top_graphs,
-        'consts' : top_consts,
-        'losses' : top_losses}
+    ret['graphs'] = top_graphs
+    ret['consts'] = top_consts
+    ret['losses'] = top_losses
 
     return ret
 
@@ -1556,7 +1519,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, positives:list = None, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, max_time:float = 3600.0, positives:list = None, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1577,7 +1540,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         assert mode in ['exhaustive', 'hierarchical'], f'Search mode {mode} is not supported.'
         self.mode = mode
         self.stop_thresh = stop_thresh
-
+        self.max_time = max_time
         self.processes = max(min(processes, multiprocessing.cpu_count()), 1)
 
         self.random_state = random_state
@@ -1624,30 +1587,32 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'opt_mode' : 'grid_zoom',
             'verbose' : verbose,
             'max_orders' : self.max_orders, 
-            'stop_thresh' : self.stop_thresh
+            'stop_thresh' : self.stop_thresh,
+            'max_time' : self.max_time
         }
         if self.mode == 'hierarchical':
             res = hierarchical_search(**params)
         else:
             res = exhaustive_search(**params)
 
-        # optimizing constants of top DAGs
-        if verbose > 0:
-            print('Optimizing best constants')
-        loss_fkt = self.loss_fkt(y.reshape(-1, 1))
-        losses = []
-        consts = []
-        for graph, c in zip(res['graphs'], res['consts']):
-            new_c, loss = get_consts_opt(graph, X, loss_fkt, c_start = c)
-            losses.append(loss)
-            consts.append(new_c)
-        best_idx = np.argmin(losses)
-        if verbose > 0:
-            print(f'Found graph with loss {losses[best_idx]}')
+        if len(res['graphs']) > 0:
+            # optimizing constants of top DAGs
+            if verbose > 0:
+                print('Optimizing best constants')
+            loss_fkt = self.loss_fkt(y.reshape(-1, 1))
+            losses = []
+            consts = []
+            for graph, c in zip(res['graphs'], res['consts']):
+                new_c, loss = get_consts_opt(graph, X, loss_fkt, c_start = c)
+                losses.append(loss)
+                consts.append(new_c)
+            best_idx = np.argmin(losses)
+            if verbose > 0:
+                print(f'Found graph with loss {losses[best_idx]}')
 
-        
-        self.cgraph = res['graphs'][best_idx]
-        self.consts = consts[best_idx]
+            
+            self.cgraph = res['graphs'][best_idx]
+            self.consts = consts[best_idx]
         return self
 
     def predict(self, X:np.ndarray, return_grad : bool = False):
