@@ -715,8 +715,8 @@ if __name__ == '__main__':
             #'operon' : (regressors.Operon(random_state = rand_state), True),
             #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
-            'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state, n_calc_nodes = 6, max_orders = int(5e6)), True), 
-            #'DAGSearch_poly' : (dag_search.PolySubRegressor(processes = 32, random_state = rand_state), True), 
+            #'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state, n_calc_nodes = 5, max_orders = int(1e6)), True), 
+            'DAGSearch_poly' : (dag_search.PolySubRegressor(processes = 32, random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:

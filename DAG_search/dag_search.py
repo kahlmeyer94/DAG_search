@@ -2099,7 +2099,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 4, topk:int = 2, max_orders:int = int(1e6), max_samples:int = 200, max_degree:int = 2, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 2, topk:int = 2, max_orders:int = int(1e6), max_samples:int = 200, max_degree:int = 2, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2192,59 +2192,59 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 repl_expr = graph.evaluate_symbolic()[0]
                 repl_idx = loss_fkt(X, graph, [], True)
 
-                
-                if verbose > 0:
-                    print(f'Replacement: x_{repl_idx} -> {repl_expr}')
-
-                if repl_idx is not None:
-                    X_new = np.delete(X, repl_idx, axis = 1)
-                    X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
-                else:
-                    X_new = X
-                X_train, X_test, y_train, y_test = train_test_split(X_new, y, test_size=0.1, random_state=42)
-
-
-                # fit using polynomial
-                self.regr_poly.fit(X_train, y_train)
-                pred_train = self.regr_poly.predict(X_train)
-                score_train = r2_score(y_train, pred_train)
-                pred_test = self.regr_poly.predict(X_test)
-                score_test = r2_score(y_test, pred_test)
-                scores.append(score_test)
-
-                expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
-                expr = self._translate(X, repl_idx, expr, repl_expr)
-                expr = utils.simplify(expr)
-                exprs.append(expr)
-                if verbose > 0:
-                    print(f'Poly: {score_test}')
-                if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
+                if (repl_idx is not None) and not found:
                     if verbose > 0:
-                        print(f'Expression is a polynomial on a substitution')
-                        print(expr)
-                    found = True
-                    break
+                        print(f'Replacement: x_{repl_idx} -> {repl_expr}')
 
-                # fit using symbolic regressor
-                self.regr_search.fit(X_train, y_train, verbose = verbose)
-                pred_train = self.regr_search.predict(X_train)
-                pred_test = self.regr_search.predict(X_test)
-                score_train = r2_score(y_train, pred_train)
-                score_test = r2_score(y_test, pred_test)
-                scores.append(score_test)
+                    if repl_idx is not None:
+                        X_new = np.delete(X, repl_idx, axis = 1)
+                        X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
+                    else:
+                        X_new = X
+                    X_train, X_test, y_train, y_test = train_test_split(X_new, y, test_size=0.1, random_state=42)
 
-                expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
-                expr = self._translate(X, repl_idx, expr, repl_expr)
-                expr = utils.simplify(expr)
-                exprs.append(expr)
-                if verbose > 0:
-                    print(f'DAG: {score_test}')
-                if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
+
+                    # fit using polynomial
+                    self.regr_poly.fit(X_train, y_train)
+                    pred_train = self.regr_poly.predict(X_train)
+                    score_train = r2_score(y_train, pred_train)
+                    pred_test = self.regr_poly.predict(X_test)
+                    score_test = r2_score(y_test, pred_test)
+                    scores.append(score_test)
+
+                    expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
+                    expr = self._translate(X, repl_idx, expr, repl_expr)
+                    expr = utils.simplify(expr)
+                    exprs.append(expr)
                     if verbose > 0:
-                        print(f'Expression found trough exhaustive search with a substitution')
-                        print(expr)
-                    found = True
-                    break
+                        print(f'Poly: {score_test}')
+                    if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
+                        if verbose > 0:
+                            print(f'Expression is a polynomial on a substitution')
+                            print(expr)
+                        found = True
+                        break
+
+                    # fit using symbolic regressor
+                    self.regr_search.fit(X_train, y_train, verbose = verbose)
+                    pred_train = self.regr_search.predict(X_train)
+                    pred_test = self.regr_search.predict(X_test)
+                    score_train = r2_score(y_train, pred_train)
+                    score_test = r2_score(y_test, pred_test)
+                    scores.append(score_test)
+
+                    expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
+                    expr = self._translate(X, repl_idx, expr, repl_expr)
+                    expr = utils.simplify(expr)
+                    exprs.append(expr)
+                    if verbose > 0:
+                        print(f'DAG: {score_test}')
+                    if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
+                        if verbose > 0:
+                            print(f'Expression found trough exhaustive search with a substitution')
+                            print(expr)
+                        found = True
+                        break
                 
 
             if not found:
