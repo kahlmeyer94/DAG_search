@@ -2099,7 +2099,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 2, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 2, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 4, topk:int = 2, max_orders:int = int(1e6), max_samples:int = 200, max_degree:int = 2, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = regr_search
@@ -2131,7 +2131,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             s_test = r2_score(y_test, pred_test)
 
             
-            expr = utils.simplify(utils.round_floats(self.regr_poly.model()))
+            expr = utils.simplify(utils.round_floats(self.regr_poly.model(), round_digits=5))
             if s_train == 1.0 and s_test == 1.0 and utils.tree_size(expr) < max_tree_size:
                 found = True
                 break
@@ -2140,7 +2140,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             # Our problem was a polynomial
             if verbose > 0:
                 print('Expression is a polynomial')
-            self.expr = utils.simplify(utils.round_floats(self.regr_poly.model()))
+            self.expr = utils.simplify(utils.round_floats(self.regr_poly.model(), round_digits=5))
             self.pareto_front = [self.expr]
         else:
             # Search for substitutions that simplify the problem
@@ -2233,7 +2233,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 score_test = r2_score(y_test, pred_test)
                 scores.append(score_test)
 
-                expr = self.regr_search.model()
+                expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
                 expr = self._translate(X, repl_idx, expr, repl_expr)
                 expr = utils.simplify(expr)
                 exprs.append(expr)
@@ -2255,7 +2255,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 pred = self.regr_search.predict(X)
                 score = r2_score(y, pred)
                 scores.append(score)
-                expr = self.regr_search.model()
+                expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
                 exprs.append(expr)
 
 
