@@ -2120,11 +2120,11 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
         # check for polynomial
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
-        polydegrees = np.arange(1, max(7, self.max_degree), 1)
+        polydegrees = np.arange(1, max(5, self.max_degree), 1)
         found = False
         for degree in polydegrees:
             if verbose > 0:
-                print(f'Testing Polynomial od degree {degree}')
+                print(f'Testing Polynomial of degree {degree}')
             self.regr_poly = BaseReg(degree = degree)
             self.regr_poly.fit(X_train, y_train)
             pred_train = self.regr_poly.predict(X_train)
