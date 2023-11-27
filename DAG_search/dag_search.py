@@ -220,6 +220,44 @@ class R2_loss_fkt_old(DAG_Loss_fkt):
 
 ## Substitution
 
+class Feature_loss_fkt(DAG_Loss_fkt):
+    def __init__(self, regr, y, test_perc = 0.1):
+        '''
+        Loss function for finding DAG for regression task.
+
+        @Params:
+            regr... regressor whos performance we compare
+            y... output of regression problem (N)
+        '''
+        super().__init__()
+        self.opt_const = False
+        self.regr = regr
+        self.y = y
+        
+        
+    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray, return_idx:bool = False) -> np.ndarray:
+        '''
+        Lossfkt(X, graph, consts)
+
+        @Params:
+            X... input for DAG (N x m)
+            cgraph... computational Graph
+            c... array of constants (2D) [not used]
+
+        @Returns:
+            1 - R2 if we use graph as new feature
+        '''
+        x_repl = cgraph.evaluate(X, np.array([]))[:, 0]
+        if np.all(np.isreal(x_repl) & np.isfinite(x_repl)): 
+            X_new = np.column_stack([x_repl, X])
+            try:
+                self.regr.fit(X_new, self.y)
+                pred = self.regr.predict(X_new)
+                loss = 1 - r2_score(self.y, pred)
+            except (np.linalg.LinAlgError, ValueError):
+                loss = np.inf
+        return loss
+
 class Repl_loss_fkt(DAG_Loss_fkt):
     def __init__(self, regr, y, test_perc = 0.1):
         '''
@@ -284,6 +322,9 @@ class Repl_loss_fkt(DAG_Loss_fkt):
             return ret_idx
         else:
             return loss
+
+
+        
 
 class Fit_loss_fkt(DAG_Loss_fkt):
     def __init__(self, regr, y, test_perc = 0.2):
@@ -2162,7 +2203,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 X_sub = X
                 y_sub = y
 
-            loss_fkt = Repl_loss_fkt(self.regr_poly, y_sub)
+            loss_fkt = Feature_loss_fkt(self.regr_poly, y_sub)
             params = {
                 'X' : X_sub,
                 'n_outps' : 1,
@@ -2182,7 +2223,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             
 
             # try top simplifications
-            loss_fkt = Repl_loss_fkt(self.regr_poly, y)
+            loss_fkt = Feature_loss_fkt(self.regr_poly, y)
             scores = []
             exprs = []
 
@@ -2192,11 +2233,10 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
             for graph in res['graphs']:
                 repl_expr = graph.evaluate_symbolic()[0]
-                repl_idx = loss_fkt(X, graph, [], True)
 
-                if (repl_idx is not None) and not found:
+                if not found:
                     if verbose > 0:
-                        print(f'Replacement: x_{repl_idx} -> {repl_expr}')
+                        print(f'Feature: {repl_expr}')
 
                     if repl_idx is not None:
                         X_new = np.delete(X, repl_idx, axis = 1)
@@ -2215,7 +2255,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                     scores.append(score_test)
 
                     expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
-                    expr = self._translate(X, repl_idx, expr, repl_expr)
+                    expr = self._translate(X, expr, repl_expr)
                     expr = utils.simplify(expr)
                     exprs.append(expr)
                     if verbose > 0:
@@ -2236,7 +2276,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                     scores.append(score_test)
 
                     expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
-                    expr = self._translate(X, repl_idx, expr, repl_expr)
+                    expr = self._translate(X, expr, repl_expr)
                     expr = utils.simplify(expr)
                     exprs.append(expr)
                     if verbose > 0:
@@ -2336,14 +2376,13 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         assert hasattr(self, 'expr'), 'No expression found yet. Call .fit first!'
         return self.expr
     
-    def _translate(self, X, repl_idx, expr, repl_expr):
+    def _translate(self, X, expr, repl_expr):
         '''
         Translates the expression back.
 
         @Params:
             X... original data
             X_new... transformed data
-            repl_idx... indices that have been replaced
             expr... final expression for X_new
             repl_expr... expression for replacement
 
@@ -2352,7 +2391,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         '''
 
         orig_idx = np.arange(X.shape[1])
-        new_idx = np.concatenate([np.array([-1]), np.delete(orig_idx, repl_idx)])
+        new_idx = np.concatenate([np.array([-1]), orig_idx])
         transl_dict = {}
         for i in range(len(new_idx)):
             n_i = new_idx[i]
