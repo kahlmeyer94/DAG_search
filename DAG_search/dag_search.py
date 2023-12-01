@@ -1772,28 +1772,21 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 if verbose > 0:
                     print(f'Replacement: {repl_expr}')
                 if not found:
-                    if verbose > 0:
-                        X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X])
-                    
-                    X_train, X_test, y_train, y_test = train_test_split(X_new, y, test_size=0.1, random_state=42)
-
+                    X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X])
 
                     # fit using polynomial
-                    self.regr_poly.fit(X_train, y_train)
-                    pred_train = self.regr_poly.predict(X_train)
-                    score_train = r2_score(y_train, pred_train)
-                    pred_test = self.regr_poly.predict(X_test)
-                    score_test = r2_score(y_test, pred_test)
-                    scores.append(score_test)
+                    self.regr_poly.fit(X_new, y)
+                    pred = self.regr_poly.predict(X_new)
+                    score = r2_score(y, pred)
+                    scores.append(score)
 
                     expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
                     expr = self._translate(X, expr, repl_expr)
                     expr = utils.simplify(expr)
                     exprs.append(expr)
-                    print(expr)
                     if verbose > 0:
-                        print(f'Poly: {score_test}')
-                    if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
+                        print(f'Poly: {score}')
+                    if score == 1.0 and utils.tree_size(expr) < max_tree_size:
                         if verbose > 0:
                             print(f'Expression is a polynomial on a substitution')
                             print(expr)
@@ -1801,20 +1794,18 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                         break
 
                     # fit using symbolic regressor
-                    self.regr_search.fit(X_train, y_train, verbose = verbose)
-                    pred_train = self.regr_search.predict(X_train)
-                    pred_test = self.regr_search.predict(X_test)
-                    score_train = r2_score(y_train, pred_train)
-                    score_test = r2_score(y_test, pred_test)
-                    scores.append(score_test)
+                    self.regr_search.fit(X_new, y, verbose = verbose)
+                    pred = self.regr_search.predict(X_new)
+                    score = r2_score(y, pred)
+                    scores.append(score)
 
                     expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
                     expr = self._translate(X, expr, repl_expr)
                     expr = utils.simplify(expr)
                     exprs.append(expr)
                     if verbose > 0:
-                        print(f'DAG: {score_test}')
-                    if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
+                        print(f'DAG: {score}')
+                    if score == 1.0 and utils.tree_size(expr) < max_tree_size:
                         if verbose > 0:
                             print(f'Expression found trough exhaustive search with a substitution')
                             print(expr)
@@ -1913,7 +1904,6 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
         @Params:
             X... original data
-            X_new... transformed data
             expr... final expression for X_new
             repl_expr... expression for replacement
 

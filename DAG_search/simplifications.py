@@ -7,11 +7,13 @@ import numpy as np
 import itertools as it
 import math
 import sympy
+import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 
 
 from DAG_search import dag_search
+from DAG_search import utils
 
 
 ####################
@@ -299,7 +301,7 @@ def get_simpl(X, y, thresh_sep = 10.0, thresh_sym = 1e-3):
             sym_sep = SymSep(f_appr)
             sym_sep.find(X, y)
             error = sym_sep.error        
-            print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
+            #print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
             if error < thresh_sym:
                 return sym_sep
     
@@ -337,11 +339,9 @@ class SimplNode():
                 c.simplify()
             
     def recombine(self):
-        if len(self.children) == 0:
+        if self.expr is None:
             # leaf node
-            assert self.expr is not None
-        else:
-            # non leave node
+            assert len(self.children) > 0
             self.child_exprs = [c.recombine() for c in self.children]
             self.simpl.solve(self.child_exprs)
             self.expr = self.simpl.expr
@@ -353,8 +353,6 @@ class SimplTree():
     '''
     Class for finding, solving and combining simplifications
     '''
-    #TODO: implement
-    # X, y -> Tree -> leaf problems -> expressions -> Tree -> combined expression
     def __init__(self) -> None:
 
         pass
@@ -362,30 +360,146 @@ class SimplTree():
     def fit(self, X, y):
         self.root = SimplNode(X, y)
         self.root.simplify()
-        self.leaves = self.get_leaves(self.root)
-        self.subproblems = [(l.X.copy(), l.y.copy()) for l in self.leaves]
+        self.tree_depth = self.depth(self.root, 0)
 
-              
-    def get_leaves(self, node):
+    def get_subproblems(self, depth):
+        self.leaves = self.get_leaves(self.root, max_depth = depth)
+        return [(l.X.copy(), l.y.copy()) for l in self.leaves]
+        
+
+    def depth(self, node, current_depth):
         if len(node.children) == 0:
+            return current_depth
+        else:
+            return max([self.depth(c, current_depth+1) for c in node.children])
+              
+    def get_leaves(self, node, max_depth = -1):
+        if len(node.children) == 0 or max_depth == 0:
             return [node]
         else:
             ret = []
             for c in node.children:
-                ret += self.get_leaves(c)
+                ret += self.get_leaves(c, max_depth=max_depth-1)
             return ret
         
+    def clear(self, node):
+        node.expr = None
+        for c in node.children:
+            self.clear(c)    
 
     def combine(self, exprs):
-        assert hasattr(self, 'subproblems') and hasattr(self, 'leaves')
-        assert len(self.subproblems) == len(exprs)
+        assert hasattr(self, 'leaves')
+        assert len(self.leaves) == len(exprs)
 
         # set expressions at leaf nodes
         for l, expr in zip(self.leaves, exprs):
             l.expr = expr
         
         # recombine recursively
-        expr = self.root.recombine()
-        return expr
+        self.expr = self.root.recombine()
+        return self.expr
 
+########################
+# Simplification - Regressor
+########################    
+
+class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+    '''
+    Symbolic Regression using recursive simplification
+
+    Sklearn interface.
+    '''
+
+    def __init__(self, symb_regr, simpl_tree = None, positives:list = None, **kwargs):
+        '''
+        @Params:
+            symb_regr... symbolic regressor (has .fit(X, y), .predict(X), .model() function)
+            positives... marks which X are strictly positive
+        '''
+        self.symb_regr = symb_regr
+        self.positives = positives
+        self.simpl_tree = None
+        self.expr = None
+        self.exec_func = None
+
+    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
+        '''
+        Fits a model on given regression data.
+        @Params:
+            X... input data (shape n_samples x inp_dim)
+            y... output data (shape n_samples)
+        '''
+        assert len(y.shape) == 1, f'y must be 1-dimensional (current shape: {y.shape})'
         
+        x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+
+        self.positives = np.all(X > 0, axis = 0)
+
+        if verbose > 0:
+            print('Recursively searching for simplifications')
+        self.simpl_tree = SimplTree()
+        self.simpl_tree.fit(X, y)
+
+        if verbose > 0:
+            print('Trying to solve subproblems')
+
+        final_scores = []
+        final_exprs = []
+
+        max_depth = self.simpl_tree.tree_depth
+        for depth in range(max_depth + 1):
+            self.simpl_tree.clear(self.simpl_tree.root) # remove all expressions
+            subproblems = self.simpl_tree.get_subproblems(depth)
+            sub_exprs = []
+            for X_sub, y_sub in subproblems:
+                # solve
+                self.symb_regr.fit(X_sub, y_sub)
+                expr = self.symb_regr.model()
+                sub_exprs.append(expr)
+
+                if verbose > 0:
+                    print(sub_exprs)
+
+            expr = self.simpl_tree.combine(sub_exprs)
+            final_exprs.append(expr)
+
+            exec_func = sympy.lambdify(x_symbs, expr)
+            pred = exec_func(*[X[:, i] for i in range(X.shape[1])])
+            score = np.sqrt(np.mean((y - pred)**2))
+            final_scores.append(score)
+            if score < 1e-10:
+                break
+        
+        best_idx = np.argmin(final_scores)
+        self.expr = final_exprs[best_idx]
+        self.exec_func = sympy.lambdify(x_symbs, self.expr)
+
+
+
+
+
+
+        return self
+
+    def predict(self, X):
+        assert hasattr(self, 'expr')
+
+        if not hasattr(self, 'exec_func'):
+            x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+            self.exec_func = sympy.lambdify(x_symbs, self.expr)
+            
+        return self.exec_func(*[X[:, i] for i in range(X.shape[1])])
+
+    def complexity(self):
+        '''
+        Complexity of expression (number of calculations)
+        '''
+        assert hasattr(self, 'expr')
+        return utils.tree_size(self.expr)
+
+    def model(self):
+        '''
+        Evaluates symbolic expression.
+        '''
+        assert hasattr(self, 'expr'), 'No expression found yet. Call .fit first!'
+        return self.expr
