@@ -7,6 +7,7 @@ import warnings
 import sympy
 from scipy.optimize import minimize
 from scipy.special import logsumexp
+from scipy import stats
 from sklearn.metrics import r2_score
 from tqdm import tqdm
 import pickle
@@ -16,7 +17,7 @@ import time
 import sklearn
 import sys
 
-from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import train_test_split
 
@@ -155,75 +156,14 @@ class R2_loss_fkt(DAG_Loss_fkt):
         else:
             return losses
 
-class R2_loss_fkt_old(DAG_Loss_fkt):
-    def __init__(self, outp:np.ndarray):
-        '''
-        Loss function for finding DAG for regression task.
-
-        @Params:
-            outp... output that DAG should match (N x n)
-        '''
-        super().__init__()
-        self.outp = outp
-        
-    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
-        '''
-        Lossfkt(X, graph, consts)
-
-        @Params:
-            X... input for DAG (N x m)
-            cgraph... computational Graph
-            c... array of constants (2D)
-
-        @Returns:
-            1-R2 of graph output and desired output for different constants
-        '''
-        if len(c.shape) == 2:
-            r = c.shape[0]
-            vec = True
-        else:
-            r = 1
-            c = c.reshape(1, -1)
-            vec = False
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            
-            pred = cgraph.evaluate(X, c = c)
-
-            # pred: r x N x n, outp: N x n
-            losses = []
-            for i in range(r):
-                v_pred = pred[i]
-                if np.all(np.isreal(v_pred)) and np.all(np.isfinite(v_pred)):
-                    avg_r2 = np.mean([r2_score(self.outp[:, j], v_pred[:, j]) for j in range(self.outp.shape[1])])
-                else:
-                    avg_r2 = 1000
-                losses.append(1 - avg_r2)
-            losses = np.array(losses)
-
-            
-            # must not be nan or inf
-            invalid = np.zeros(r).astype(bool)
-            invalid = invalid | np.isnan(losses)
-            invalid = invalid | np.isinf(losses)
-            
-        # consider not using inf, since optimizers struggle with this
-        losses[invalid] = 1000
-        losses[losses > 1000] = 1000
-        losses[losses < 0] = 1000
-
-        if not vec:
-            return losses[0]
-        else:
-            return losses
-
 ## Substitution
 
 class Feature_loss_fkt(DAG_Loss_fkt):
-    def __init__(self, regr, y, test_perc = 0.1):
+    def __init__(self, regr, y):
         '''
         Loss function for finding DAG for regression task.
+
+        Measures the fit of a polynomial based on X and DAG(X).
 
         @Params:
             regr... regressor whos performance we compare
@@ -235,7 +175,7 @@ class Feature_loss_fkt(DAG_Loss_fkt):
         self.y = y
         
         
-    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray, return_idx:bool = False) -> np.ndarray:
+    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
         '''
         Lossfkt(X, graph, consts)
 
@@ -247,84 +187,20 @@ class Feature_loss_fkt(DAG_Loss_fkt):
         @Returns:
             1 - R2 if we use graph as new feature
         '''
+        loss = np.inf
         x_repl = cgraph.evaluate(X, np.array([]))[:, 0]
         if np.all(np.isreal(x_repl) & np.isfinite(x_repl)): 
-            X_new = np.column_stack([x_repl, X])
-            try:
-                self.regr.fit(X_new, self.y)
-                pred = self.regr.predict(X_new)
-                loss = 1 - r2_score(self.y, pred)
-            except (np.linalg.LinAlgError, ValueError):
-                loss = np.inf
-        else:
-            loss = np.inf
-        return loss
-
-class Repl_loss_fkt(DAG_Loss_fkt):
-    def __init__(self, regr, y, test_perc = 0.1):
-        '''
-        Loss function for finding DAG for regression task.
-
-        @Params:
-            regr... regressor whos performance we compare
-            y... output of regression problem (N)
-        '''
-        super().__init__()
-        self.opt_const = False
-        self.regr = regr
-        self.y = y
-        
-        
-    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray, return_idx:bool = False) -> np.ndarray:
-        '''
-        Lossfkt(X, graph, consts)
-
-        @Params:
-            X... input for DAG (N x m)
-            cgraph... computational Graph
-            c... array of constants (2D) [not used]
-
-        @Returns:
-            1 - R2 if we use graph as replacement feature
-        '''
-        ret_idx = None
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            
-            expr = cgraph.evaluate_symbolic()[0]
-            used_idxs = sorted([int(str(e).split('_')[-1]) for e in expr.free_symbols])
-            
-            if len(used_idxs) >= 1:
-                x_repl = cgraph.evaluate(X, np.array([]))[:, 0]
-                if np.all(np.isreal(x_repl) & np.isfinite(x_repl)): 
-                    losses = []
-                    combs = [[i] for i in used_idxs] # single
-                    #if len(used_idxs) > 1:
-                    #    combs += [used_idxs] # all
-                    #for i in range(1, len(used_idxs) + 1):
-                    #    combs += [list(x) for x in itertools.combinations(used_idxs, i)]
-
-                    for repl_comb in combs:
-                        X_new = np.column_stack([x_repl, np.delete(X, repl_comb, axis = 1)])
-                        try:
-                            self.regr.fit(X_new, self.y)
-                            pred = self.regr.predict(X_new)
-                            loss = 1 - r2_score(self.y, pred)
-                        except (np.linalg.LinAlgError, ValueError):
-                            loss = np.inf
-                        losses.append(loss)
-                    loss = np.min(losses)
-                    ret_idx = combs[np.argmin(losses)]
-                else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                X_new = np.column_stack([x_repl, X])
+                try:
+                    self.regr.fit(X_new, self.y)
+                    pred = self.regr.predict(X_new)
+                    loss = 1 - r2_score(self.y, pred)
+                except (np.linalg.LinAlgError, ValueError):
                     loss = np.inf
-            else:
-                loss = np.inf
-
-        if return_idx:
-            return ret_idx
-        else:
-            return loss
-
+        return loss
+        
 class Fit_loss_fkt(DAG_Loss_fkt):
     def __init__(self, regr, y, test_perc = 0.2):
         '''
@@ -396,11 +272,10 @@ class Gradient_loss_fkt(DAG_Loss_fkt):
             max_samples... maximum samples for estimating gradient
         '''
         super().__init__()
-
-        self.opt_const = False
         self.regr = regr
         self.y = y
-        self.regr.fit(X, y)
+        if hasattr(self.regr, 'fit'):
+            self.regr.fit(X, y)
         self.df_dx = utils.est_gradient(self.regr, X)
         
         
@@ -411,44 +286,61 @@ class Gradient_loss_fkt(DAG_Loss_fkt):
         @Params:
             X... input for DAG (N x m)
             cgraph... computational Graph
-            c... array of constants (2D) [not used]
+            c... array of constants (2D)
 
         @Returns:
             Median absolute error of gradients for substituted variables if we use graph as substitution
         '''
+        if len(c.shape) == 2:
+            r = c.shape[0]
+            vec = True
+        else:
+            r = 1
+            c = c.reshape(1, -1)
+            vec = False
+        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
             expr = cgraph.evaluate_symbolic()[0]
-            used_idxs = sorted([int(str(e).split('_')[-1]) for e in expr.free_symbols])
+            I = sorted([int(str(e).split('_')[-1]) for e in expr.free_symbols if str(e).startswith('x_')])
             
-            if len(used_idxs) > 1:
+            df_dxI = self.df_dx[:, I]
+            df_dxI_norm = (df_dxI.T/np.linalg.norm(df_dxI, axis = 1)).T # shape N x I
+            
+            if len(I) > 1:
 
-                X_new, grad_new = cgraph.evaluate(X, np.array([]), return_grad = True)
-                X_new = np.column_stack([X_new] + [X[:, i] for i in range(X.shape[1]) if i not in used_idxs])
+                h_x, dh_dx = cgraph.evaluate(X, c, return_grad = True) # shape r x 1 x N x inps
 
-                if np.all(np.isreal(X_new) & np.isfinite(X_new) & (np.abs(X_new) < 1000)): 
-                    # gradient of substitution
-                    dz_dx = grad_new[0]
+                valids = np.all(np.isfinite(h_x).reshape(r, -1), axis=-1)
+                valids = valids & np.all((h_x < 10000).reshape(r, -1), axis=-1)
 
-                    # gradient of new regression problem
-                    self.regr.fit(X_new, self.y) # fit on all
+                dh_dx = dh_dx[:, 0, :, :] # shape r x N x inps
+                dh_dxI = dh_dx[:, :, I] # shape r x N x I
 
-                    df_dz = utils.est_gradient(self.regr, X_new)[:, 0]
+                hI_norm = np.linalg.norm(dh_dxI, axis = -1) # shape r x N
+                dh_dxI_norm = np.transpose(np.transpose(dh_dxI, (2, 0, 1))/hI_norm, (1, 2, 0)) # shape r x N x I
+                #dh_dxI_norm = (dh_dxI - self.mu[I])/self.std[I]
 
-                    # condition
-                    rhs = (dz_dx[:, used_idxs].T * df_dz).T
-                    lhs = self.df_dx[:, used_idxs]
+                v1 = dh_dxI_norm.reshape(r, -1) # shape r x N*I
+                v2 = df_dxI_norm.flatten() # shape N*I
 
-                    loss = np.median(np.abs(rhs - lhs))
+                losses1 = np.median((v1 - v2)**2, axis = -1)
+                losses2 = np.median((v1 + v2)**2, axis = -1)
+                losses = np.minimum(losses1, losses2)
 
-                else:
-                    loss = np.inf
+                losses[~valids] = np.inf
+
             else:
-                loss = np.inf
-            
-        return loss
+                losses = np.inf*np.ones(r)
 
+            losses[~np.isfinite(losses)] = np.inf
+            losses[np.isnan(losses)] = np.inf
+        if not vec:
+            return losses[0]
+        else:
+            return losses
+        
 
 def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_init:np.ndarray = 0, interval_size:float = 2.0, n_steps:int = 51, return_arg:bool = False) -> tuple:
     '''
@@ -1550,7 +1442,95 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 ########################
 # Sklearn Interface for Symbolic Regression Task
 ########################
+class BaseReg():
+    '''
+    Regressor based on Linear combination of Base functions
+    '''
+    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, alpha:float = 0.0, max_terms:int = -1, **params):
+        self.degree = degree
+        self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
+        if alpha <= 0.0:
+            self.regr = LinearRegression()
+        else:
+            self.regr = Lasso(alpha = alpha, max_iter = 100)
+        self.X = None
+        self.y = None
+        self.max_terms = max_terms
+        
+    def regression_p_values(self, X, y, reg):
+        """
+        Computes p-values using t-Test (null hyphotesis: c_i == 0)
+        """
 
+        yhat = reg.predict(X)
+        X_tmp = np.column_stack([np.ones(len(X)), X])
+        c_tmp = np.concatenate([np.array([reg.intercept_]), reg.coef_])
+        XtX_inv = np.linalg.inv(X_tmp.T@X_tmp)
+
+        df = len(X_tmp) - X_tmp.shape[1]
+        mse = sum((y - yhat)**2)/df
+        sd_err = np.sqrt(mse * XtX_inv.diagonal())
+        t_vals = c_tmp/sd_err
+        return 2 * (1 - stats.t.cdf(np.abs(t_vals), df))
+
+
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        X_poly = self.poly.fit_transform(self.X)
+        X_trig = np.column_stack([np.sin(self.X), np.cos(self.X)])
+        X_all = np.column_stack([X_poly, X_trig])
+        self.regr.fit(X_all, self.y)
+
+        if self.max_terms > 0:
+            # keep only top coefficients according to p value
+
+            current_coef = self.regr.coef_
+            
+            p_values = self.regression_p_values(X_all, y, self.regr)
+
+
+            supress_idxs = np.argsort(p_values[1:])[:-self.max_terms]
+            current_coef[supress_idxs] = 0.0
+            self.regr.coef_ = current_coef
+
+    def predict(self, X):
+        assert self.X is not None
+        X_poly = self.poly.fit_transform(X)
+        X_trig = np.column_stack([np.sin(X), np.cos(X)])
+        X_all = np.column_stack([X_poly, X_trig])
+        pred = self.regr.predict(X_all)
+        return pred
+
+    def model(self):
+        assert self.X is not None
+        names = [sympy.symbols(f'x_{i}', real = True) for i in range(self.X.shape[1])]
+
+        X_idxs = np.arange(self.X.shape[1])
+        X_poly = []
+        for degree in range(1, self.degree+1):   
+            poly_idxs = itertools.combinations_with_replacement(X_idxs, degree)
+            for idxs in poly_idxs:
+                prod = 1
+                for i in idxs:
+                    prod = prod*names[i]
+                X_poly.append(prod)
+        X_trig = []
+        for i in range(self.X.shape[1]):
+            X_trig.append(sympy.sin(names[i]))
+        for i in range(self.X.shape[1]):
+            X_trig.append(sympy.cos(names[i]))
+
+        expr = sympy.sympify(self.regr.intercept_)
+        for x_name, alpha in zip(X_poly + X_trig, self.regr.coef_):
+            if abs(alpha) > 0.0:
+                expr += alpha*x_name
+        return expr
 
 class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
@@ -1585,7 +1565,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
         self.random_state = random_state
         self.loss_fkt = loss_fkt
-        self.positives = None
+        self.positives = positives
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
@@ -1701,95 +1681,37 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         assert hasattr(self, 'cgraph'), 'No graph found yet. Call .fit first!'
         return self.cgraph.n_operations()
     
-
-
 ########################
-# New: Replacement Regressor
+# New: Polynomial Feature Regressor
 # ########################
-class BaseReg():
-    '''
-    Regressor based on Regression of Base functions
-    '''
-    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
-        self.degree = degree
-        self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
-        self.regr = LinearRegression()
-        self.X = None
-        self.y = None
-        
-    def fit(self, X, y):
-        assert len(y.shape) == 1
-        self.y = y.copy()
 
-        if len(X.shape) == 1:
-            self.X = X.reshape(-1, 1).copy()
-        else:
-            self.X = X.copy()
-        X_poly = self.poly.fit_transform(self.X)
-        X_trig = np.column_stack([np.sin(self.X), np.cos(self.X)])
-        X_all = np.column_stack([X_poly, X_trig])
-        self.regr.fit(X_all, self.y)
-
-    def predict(self, X):
-        assert self.X is not None
-        X_poly = self.poly.fit_transform(X)
-        X_trig = np.column_stack([np.sin(X), np.cos(X)])
-        X_all = np.column_stack([X_poly, X_trig])
-        pred = self.regr.predict(X_all)
-        return pred
-
-    def model(self):
-        assert self.X is not None
-        names = [sympy.symbols(f'x_{i}', real = True) for i in range(self.X.shape[1])]
-
-        X_idxs = np.arange(self.X.shape[1])
-        X_poly = []
-        for degree in range(1, self.degree+1):   
-            poly_idxs = itertools.combinations_with_replacement(X_idxs, degree)
-            for idxs in poly_idxs:
-                prod = 1
-                for i in idxs:
-                    prod = prod*names[i]
-                X_poly.append(prod)
-        X_trig = []
-        for i in range(self.X.shape[1]):
-            X_trig.append(sympy.sin(names[i]))
-        for i in range(self.X.shape[1]):
-            X_trig.append(sympy.cos(names[i]))
-
-        expr = self.regr.intercept_
-        for x_name, alpha in zip(X_poly + X_trig, self.regr.coef_):
-            expr += alpha*x_name
-        return expr
-
-class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
 
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, regr_search = None, simpl_nodes:int = 3, topk:int = 2, max_orders:int = int(1e5), max_samples:int = 200, max_degree:int = 3, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 2, max_tree_size:int = 30, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
-        self.regr_search = regr_search
+        self.regr_search = self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state, max_orders=max_orders)
         self.regr_poly = None
         self.simpl_nodes = simpl_nodes
         self.max_orders = max_orders
         self.topk = topk
-        self.max_samples = max_samples
         self.max_degree = max_degree
+        self.max_tree_size = max_tree_size
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
-        max_tree_size = 30
+        max_tree_size = self.max_tree_size
 
         if self.random_state is not None:
             np.random.seed(self.random_state)
-        if self.regr_search is None:
-            self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
+            
 
         # check for polynomial
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.1, random_state=42)
         polydegrees = np.arange(1, max(5, self.max_degree), 1)
         found = False
         for degree in polydegrees:
@@ -1798,8 +1720,8 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.regr_poly = BaseReg(degree = degree)
             self.regr_poly.fit(X_train, y_train)
             pred_train = self.regr_poly.predict(X_train)
-            s_train = r2_score(y_train, pred_train)
             pred_test = self.regr_poly.predict(X_test)
+            s_train = r2_score(y_train, pred_train)
             s_test = r2_score(y_test, pred_test)
 
             
@@ -1821,20 +1743,9 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             if verbose > 0:
                 print('Searching for Replacements')
 
-            # for speedup, only on subset of samples
-            if len(X) > self.max_samples:
-                sub_idxs = np.arange(len(X))
-                np.random.shuffle(sub_idxs)
-                sub_idxs = sub_idxs[:self.max_samples]
-                X_sub = X[sub_idxs]
-                y_sub = y[sub_idxs]
-            else:
-                X_sub = X
-                y_sub = y
-
-            loss_fkt = Feature_loss_fkt(self.regr_poly, y_sub)
+            loss_fkt = Feature_loss_fkt(self.regr_poly, y)
             params = {
-                'X' : X_sub,
+                'X' : X,
                 'n_outps' : 1,
                 'loss_fkt' : loss_fkt,
                 'k' : 0,
@@ -1848,11 +1759,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             }
             res = exhaustive_search(**params)
 
-
-            
-
-            # try top simplifications
-            loss_fkt = Feature_loss_fkt(self.regr_poly, y)
+            # try top substitutions
             scores = []
             exprs = []
 
@@ -1862,16 +1769,12 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
             for graph in res['graphs']:
                 repl_expr = graph.evaluate_symbolic()[0]
-
+                if verbose > 0:
+                    print(f'Replacement: {repl_expr}')
                 if not found:
                     if verbose > 0:
-                        print(f'Feature: {repl_expr}')
-
-                    if repl_idx is not None:
-                        X_new = np.delete(X, repl_idx, axis = 1)
-                        X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X_new])
-                    else:
-                        X_new = X
+                        X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X])
+                    
                     X_train, X_test, y_train, y_test = train_test_split(X_new, y, test_size=0.1, random_state=42)
 
 
@@ -1887,6 +1790,7 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                     expr = self._translate(X, expr, repl_expr)
                     expr = utils.simplify(expr)
                     exprs.append(expr)
+                    print(expr)
                     if verbose > 0:
                         print(f'Poly: {score_test}')
                     if score_train == 1.0 and score_test == 1.0 and utils.tree_size(expr) < max_tree_size:
@@ -1963,8 +1867,6 @@ class PolySubRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 else:
                     self.expr = exprs[np.argmin(sizes)]
         
-
-
 
         # for equality check, make sure that variables have the right properties
         positives = np.all(X > 0, axis = 0)
