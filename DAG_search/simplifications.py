@@ -196,7 +196,7 @@ class AddSep(Simplification):
 
 class SymSep(Simplification):
 
-    def __init__(self, f_appr, X=None, y=None, expr=None, n_nodes:int = 1):
+    def __init__(self, f_appr, X=None, y=None, expr=None, n_nodes:int = 3):
         super().__init__(f_appr, X, y, expr)
         self.error = None
         self.Xs = []
@@ -219,7 +219,7 @@ class SymSep(Simplification):
             'topk' : 1,
             'opt_mode' : 'grid_zoom',
             'verbose' : 0,
-            'max_orders' : int(1e5), 
+            'max_orders' : int(1e3), 
             'stop_thresh' : 1e-20
         }
         res = dag_search.exhaustive_search(**params)
@@ -279,31 +279,34 @@ def get_simpl(X, y, thresh_sep = 10.0, thresh_sym = 1e-3):
         f_rmse = test_rmses[min_idx]
 
         if f_rmse < 1e-1:
-            # 1. Seperability
-            mul_sep = MultSep(f_appr)
-            mul_sep.find(X, y)
-            mul_error = mul_sep.error
 
-            add_sep = AddSep(f_appr)
-            add_sep.find(X, y)
-            add_error = add_sep.error
-
-            if mul_error < add_error:
-                sep = mul_sep
-                sep_error = mul_error
-            else:
-                sep = add_sep
-                sep_error = add_error
-            if sep_error/f_rmse < thresh_sep:
-                return sep
-            
-            # 2. Symmetry
+            # 1. Symmetry
             sym_sep = SymSep(f_appr)
             sym_sep.find(X, y)
             error = sym_sep.error        
-            #print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
+            print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
             if error < thresh_sym:
                 return sym_sep
+            
+            
+            # 2. Seperability
+            if False:
+                mul_sep = MultSep(f_appr)
+                mul_sep.find(X, y)
+                mul_error = mul_sep.error
+
+                add_sep = AddSep(f_appr)
+                add_sep.find(X, y)
+                add_error = add_sep.error
+
+                if mul_error < add_error:
+                    sep = mul_sep
+                    sep_error = mul_error
+                else:
+                    sep = add_sep
+                    sep_error = add_error
+                if sep_error/f_rmse < thresh_sep:
+                    return sep
     
     return None
 
@@ -375,12 +378,20 @@ class SimplTree():
               
     def get_leaves(self, node, max_depth = -1):
         if len(node.children) == 0 or max_depth == 0:
-            return [node]
+            if node.expr is not None:
+                return [] # already solved
+            else:
+                return [node]
         else:
             ret = []
             for c in node.children:
                 ret += self.get_leaves(c, max_depth=max_depth-1)
             return ret
+        
+    def traverse(self, node, func):
+        for c in node.children:
+            self.traverse(c, func)
+        func(node)
         
     def clear(self, node):
         node.expr = None

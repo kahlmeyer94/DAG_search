@@ -12,7 +12,8 @@ from timeit import default_timer as timer
 
 from DAG_search import utils
 from DAG_search import dag_search
-from regressors import regressors
+from regressors import regressors as sregs
+
 
 def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2):
     '''
