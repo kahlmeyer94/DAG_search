@@ -1716,6 +1716,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.1, random_state=42)
         polydegrees = np.arange(1, max(5, self.max_degree), 1)
         found = False
+        test_scores = []
         for degree in polydegrees:
             if verbose > 0:
                 print(f'Testing Polynomial of degree {degree}')
@@ -1725,7 +1726,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             pred_test = self.regr_poly.predict(X_test)
             s_train = r2_score(y_train, pred_train)
             s_test = r2_score(y_test, pred_test)
-
+            test_scores.append(s_test)
             
             expr = utils.simplify(utils.round_floats(self.regr_poly.model(), round_digits=5))
             if s_train == 1.0 and s_test == 1.0 and utils.tree_size(expr) < max_tree_size:
@@ -1740,7 +1741,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.pareto_front = [self.expr]
         else:
             # Search for substitutions that simplify the problem
-            self.regr_poly = BaseReg(degree = self.max_degree)
+            self.regr_poly = BaseReg(degree = polydegrees[np.argmin(test_scores)])
             self.regr_poly.fit(X, y)
 
             if verbose > 0:
