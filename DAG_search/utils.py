@@ -12,7 +12,7 @@ import networkx as nx
 # Gradient estimation
 #####################################
 
-def est_gradient(reg, X, eps = 1e-5):
+def est_gradient(reg, X, fx = None, eps = 1e-5):
     
     X_tmp = []
     for i in range(X.shape[1]):
@@ -25,7 +25,10 @@ def est_gradient(reg, X, eps = 1e-5):
     X_tmp = np.concatenate(X_tmp, axis=0)
 
     grad_X = reg.predict(X_tmp)
-    val_X = reg.predict(X)
+    if fx is None:
+        val_X = reg.predict(X)
+    else:
+        val_X = fx
 
     N = len(X)
     f_ = []
