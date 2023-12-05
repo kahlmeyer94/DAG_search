@@ -196,7 +196,7 @@ class AddSep(Simplification):
 
 class SymSep(Simplification):
 
-    def __init__(self, f_appr, X=None, y=None, expr=None, n_nodes:int = 3):
+    def __init__(self, f_appr, X=None, y=None, expr=None, n_nodes:int = 1):
         super().__init__(f_appr, X, y, expr)
         self.error = None
         self.Xs = []
@@ -219,7 +219,7 @@ class SymSep(Simplification):
             'topk' : 1,
             'opt_mode' : 'grid_zoom',
             'verbose' : 0,
-            'max_orders' : int(1e3), 
+            'max_orders' : int(1e4), 
             'stop_thresh' : 1e-20
         }
         res = dag_search.exhaustive_search(**params)
@@ -241,8 +241,7 @@ class SymSep(Simplification):
         self.ys = [y]
         self.transl_dict = transl_dict
         self.exprs = []
-
-    
+ 
     def solve(self, exprs):
         assert len(exprs) == 1
         self.exprs = exprs
@@ -259,55 +258,32 @@ class SymSep(Simplification):
 # Simplification - Tree
 ########################
 
-def get_simpl(X, y, thresh_sep = 10.0, thresh_sym = 1e-3):
+def get_simpl(X, y):
     if X.shape[1] > 1:
         # 1. use Polynomial to fit
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
-        polydegrees = np.arange(1, 7, 1)
-        test_rmses = []
+        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        polydegrees = np.arange(1, 10, 1)
+        rmses = []
         for degree in polydegrees:
             f_appr = dag_search.BaseReg(degree = degree)
-            f_appr.fit(X_train, y_train)
-            pred_test = f_appr.predict(X_test)
-            rmse_test = np.sqrt(np.mean((y_test - pred_test)**2))
-            test_rmses.append(rmse_test)
-            if rmse_test < 1e-3:
+            f_appr.fit(X, y)
+            pred = f_appr.predict(X)
+            rmse = np.sqrt(np.mean((y - pred)**2))
+            rmses.append(rmse)
+            if rmse < 1e-5:
                 break
-        min_idx = np.argmin(test_rmses)
+        min_idx = np.argmin(rmses)
         f_appr = dag_search.BaseReg(degree = polydegrees[min_idx])
         f_appr.fit(X, y)
-        f_rmse = test_rmses[min_idx]
+        f_rmse = rmses[min_idx]
 
-        if f_rmse < 1e-1:
-
-            # 1. Symmetry
-            sym_sep = SymSep(f_appr)
-            sym_sep.find(X, y)
-            error = sym_sep.error        
-            print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
-            if error < thresh_sym:
-                return sym_sep
+        # 1. Symmetry
+        sym_sep = SymSep(f_appr)
+        sym_sep.find(X, y)
+        error = sym_sep.error        
+        #print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
+        return sym_sep
             
-            
-            # 2. Seperability
-            if False:
-                mul_sep = MultSep(f_appr)
-                mul_sep.find(X, y)
-                mul_error = mul_sep.error
-
-                add_sep = AddSep(f_appr)
-                add_sep.find(X, y)
-                add_error = add_sep.error
-
-                if mul_error < add_error:
-                    sep = mul_sep
-                    sep_error = mul_error
-                else:
-                    sep = add_sep
-                    sep_error = add_error
-                if sep_error/f_rmse < thresh_sep:
-                    return sep
-    
     return None
 
 
