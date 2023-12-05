@@ -1693,7 +1693,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 2, max_tree_size:int = 30, max_samples:int = 100, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_samples:int = 100, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
@@ -1741,6 +1741,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         else:
             # Search for substitutions that simplify the problem
             self.regr_poly = BaseReg(degree = self.max_degree)
+            self.regr_poly.fit(X, y)
 
             if verbose > 0:
                 print('Searching for Replacements')
