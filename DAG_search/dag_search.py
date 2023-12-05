@@ -1741,7 +1741,6 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.pareto_front = [self.expr]
         else:
             # Search for substitutions that simplify the problem
-            selected = False
             for degree, score in zip(polydegrees, test_scores):
                 if score > 0.999:
                     break
