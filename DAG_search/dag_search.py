@@ -1744,13 +1744,13 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             selected = False
             for degree, score in zip(polydegrees, test_scores):
                 if score > 0.999:
-                    self.regr_poly = BaseReg(degree = degree)
-                    selected = True
                     break
-            if not selected:
-                self.regr_poly = BaseReg(degree = self.max_degree)
-            self.regr_poly.fit(X, y)
+            if verbose > 0:
+                print(f'Selected degree {degree}')
             
+            self.regr_poly = BaseReg(degree = degree)
+            self.regr_poly.fit(X, y)
+
             if verbose > 0:
                 print('Searching for Replacements')
 
