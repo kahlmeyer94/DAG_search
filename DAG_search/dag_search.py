@@ -1442,6 +1442,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 ########################
 # Sklearn Interface for Symbolic Regression Task
 ########################
+
 class BaseReg():
     '''
     Regressor based on Linear combination of Base functions
@@ -1452,7 +1453,7 @@ class BaseReg():
         if alpha <= 0.0:
             self.regr = LinearRegression()
         else:
-            self.regr = Lasso(alpha = alpha, max_iter = 100)
+            self.regr = Lasso(alpha = alpha, max_iter = 10000)
         self.X = None
         self.y = None
         self.max_terms = max_terms
@@ -1692,7 +1693,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(5e4), max_degree:int = 2, max_tree_size:int = 30, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(5e4), max_degree:int = 2, max_tree_size:int = 30, max_samples:int = 1000, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = self.regr_search = DAGRegressor(processes=self.processes, n_calc_nodes = 4, random_state = self.random_state, max_orders=int(1e5))
@@ -1702,6 +1703,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.topk = topk
         self.max_degree = max_degree
         self.max_tree_size = max_tree_size
+        self.max_samples = max_samples
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         max_tree_size = self.max_tree_size
@@ -1743,9 +1745,18 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             if verbose > 0:
                 print('Searching for Replacements')
 
-            loss_fkt = Feature_loss_fkt(self.regr_poly, y)
+            X_sub = X
+            y_sub = y
+            if self.max_samples is not None:
+                sub_idxs = np.arange(len(X))
+                np.random.shuffle(sub_idxs)
+                sub_idxs = sub_idxs[:self.max_samples]
+                X_sub = X[sub_idxs]
+                y_sub = y[sub_idxs]
+
+            loss_fkt = Feature_loss_fkt(self.regr_poly, y_sub)
             params = {
-                'X' : X,
+                'X' : X_sub,
                 'n_outps' : 1,
                 'loss_fkt' : loss_fkt,
                 'k' : 0,
