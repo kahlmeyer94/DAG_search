@@ -276,7 +276,7 @@ class Gradient_loss_fkt(DAG_Loss_fkt):
         self.y = y
         if hasattr(self.regr, 'fit'):
             self.regr.fit(X, y)
-        self.df_dx = utils.est_gradient(self.regr, X)
+        self.df_dx = utils.est_gradient(self.regr, X, y)
         
         
     def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
