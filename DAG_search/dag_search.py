@@ -1741,7 +1741,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.pareto_front = [self.expr]
         else:
             # Search for substitutions that simplify the problem
-            self.regr_poly = BaseReg(degree = polydegrees[np.argmin(test_scores)])
+            self.regr_poly = BaseReg(degree = polydegrees[np.argmax(test_scores)])
             self.regr_poly.fit(X, y)
 
             if verbose > 0:
