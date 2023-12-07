@@ -1445,11 +1445,11 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 
 class BaseReg():
     '''
-    Regressor based on Linear combination of Base functions
+    Regressor based on Linear combination of polynomials and trgonometric functions
     '''
-    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, alpha:float = 0.0, max_terms:int = -1, **params):
+    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, alpha:float = 0.0, max_terms:int = -1, interactions = 2, **params):
         self.degree = degree
-        self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
+        #self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
         if alpha <= 0.0:
             self.regr = LinearRegression()
         else:
@@ -1457,7 +1457,20 @@ class BaseReg():
         self.X = None
         self.y = None
         self.max_terms = max_terms
+        self.interactions = interactions
         
+    def transform2poly(self, X):
+        # polynomials up to degree
+        # interactions up to interactions
+        X_poly = np.column_stack([X**(i+1) for i in range(self.degree)])
+        X_interact = []
+        idxs = np.arange(0, X.shape[1], 1)
+        for combs in itertools.combinations(idxs, self.interactions):
+            x_inter = np.prod(X[:, combs], axis=1)
+            X_interact.append(x_inter)
+        X_interact = np.column_stack(X_interact)
+        return np.column_stack([X_poly, X_interact])
+
     def regression_p_values(self, X, y, reg):
         """
         Computes p-values using t-Test (null hyphotesis: c_i == 0)
@@ -1474,7 +1487,6 @@ class BaseReg():
         t_vals = c_tmp/sd_err
         return 2 * (1 - stats.t.cdf(np.abs(t_vals), df))
 
-
     def fit(self, X, y):
         assert len(y.shape) == 1
         self.y = y.copy()
@@ -1483,9 +1495,11 @@ class BaseReg():
             self.X = X.reshape(-1, 1).copy()
         else:
             self.X = X.copy()
-        X_poly = self.poly.fit_transform(self.X)
+        
         X_trig = np.column_stack([np.sin(self.X), np.cos(self.X)])
+        X_poly = self.transform2poly(X)
         X_all = np.column_stack([X_poly, X_trig])
+
         self.regr.fit(X_all, self.y)
 
         if self.max_terms > 0:
@@ -1502,8 +1516,9 @@ class BaseReg():
 
     def predict(self, X):
         assert self.X is not None
-        X_poly = self.poly.fit_transform(X)
         X_trig = np.column_stack([np.sin(X), np.cos(X)])
+        X_poly = self.transform2poly(X)
+        
         X_all = np.column_stack([X_poly, X_trig])
         pred = self.regr.predict(X_all)
         return pred
@@ -1515,12 +1530,16 @@ class BaseReg():
         X_idxs = np.arange(self.X.shape[1])
         X_poly = []
         for degree in range(1, self.degree+1):   
-            poly_idxs = itertools.combinations_with_replacement(X_idxs, degree)
-            for idxs in poly_idxs:
-                prod = 1
-                for i in idxs:
-                    prod = prod*names[i]
-                X_poly.append(prod)
+            for name in names: 
+                X_poly.append(name**degree)
+        X_interact = []
+        idxs = np.arange(0, self.X.shape[1], 1)
+        for combs in itertools.combinations(idxs, self.interactions):
+            x_inter = 1.0
+            for i in combs:
+                x_inter = x_inter * names[i]
+            X_interact.append(x_inter)
+
         X_trig = []
         for i in range(self.X.shape[1]):
             X_trig.append(sympy.sin(names[i]))
@@ -1528,7 +1547,7 @@ class BaseReg():
             X_trig.append(sympy.cos(names[i]))
 
         expr = sympy.sympify(self.regr.intercept_)
-        for x_name, alpha in zip(X_poly + X_trig, self.regr.coef_):
+        for x_name, alpha in zip(X_poly + X_interact + X_trig, self.regr.coef_):
             if abs(alpha) > 0.0:
                 expr += alpha*x_name
         return expr
@@ -1693,7 +1712,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_samples:int = 100, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 3, max_tree_size:int = 30, max_samples:int = 100, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
@@ -1741,7 +1760,9 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.pareto_front = [self.expr]
         else:
             # Search for substitutions that simplify the problem
-            for degree, score in zip(polydegrees, test_scores):
+            polydegrees = np.arange(1, self.max_degree, 1)
+
+            for degree, score in zip(polydegrees, test_scores[:len(polydegrees)]):
                 if score > 0.999:
                     break
             if verbose > 0:
