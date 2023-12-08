@@ -1443,115 +1443,6 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 # Sklearn Interface for Symbolic Regression Task
 ########################
 
-class BaseReg():
-    '''
-    Regressor based on Linear combination of polynomials and trgonometric functions
-    '''
-    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, alpha:float = 0.0, max_terms:int = -1, interactions = 2, **params):
-        self.degree = degree
-        #self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
-        if alpha <= 0.0:
-            self.regr = LinearRegression()
-        else:
-            self.regr = Lasso(alpha = alpha, max_iter = 10000)
-        self.X = None
-        self.y = None
-        self.max_terms = max_terms
-        self.interactions = interactions
-        
-    def transform2poly(self, X):
-        # polynomials up to degree
-        # interactions up to interactions
-        X_poly = np.column_stack([X**(i+1) for i in range(self.degree)])
-        X_interact = []
-        idxs = np.arange(0, X.shape[1], 1)
-        for combs in itertools.combinations(idxs, self.interactions):
-            x_inter = np.prod(X[:, combs], axis=1)
-            X_interact.append(x_inter)
-        X_interact = np.column_stack(X_interact)
-        return np.column_stack([X_poly, X_interact])
-
-    def regression_p_values(self, X, y, reg):
-        """
-        Computes p-values using t-Test (null hyphotesis: c_i == 0)
-        """
-
-        yhat = reg.predict(X)
-        X_tmp = np.column_stack([np.ones(len(X)), X])
-        c_tmp = np.concatenate([np.array([reg.intercept_]), reg.coef_])
-        XtX_inv = np.linalg.inv(X_tmp.T@X_tmp)
-
-        df = len(X_tmp) - X_tmp.shape[1]
-        mse = sum((y - yhat)**2)/df
-        sd_err = np.sqrt(mse * XtX_inv.diagonal())
-        t_vals = c_tmp/sd_err
-        return 2 * (1 - stats.t.cdf(np.abs(t_vals), df))
-
-    def fit(self, X, y):
-        assert len(y.shape) == 1
-        self.y = y.copy()
-
-        if len(X.shape) == 1:
-            self.X = X.reshape(-1, 1).copy()
-        else:
-            self.X = X.copy()
-        
-        X_trig = np.column_stack([np.sin(self.X), np.cos(self.X)])
-        X_poly = self.transform2poly(X)
-        X_all = np.column_stack([X_poly, X_trig])
-
-        self.regr.fit(X_all, self.y)
-
-        if self.max_terms > 0:
-            # keep only top coefficients according to p value
-
-            current_coef = self.regr.coef_
-            
-            p_values = self.regression_p_values(X_all, y, self.regr)
-
-
-            supress_idxs = np.argsort(p_values[1:])[:-self.max_terms]
-            current_coef[supress_idxs] = 0.0
-            self.regr.coef_ = current_coef
-
-    def predict(self, X):
-        assert self.X is not None
-        X_trig = np.column_stack([np.sin(X), np.cos(X)])
-        X_poly = self.transform2poly(X)
-        
-        X_all = np.column_stack([X_poly, X_trig])
-        pred = self.regr.predict(X_all)
-        return pred
-
-    def model(self):
-        assert self.X is not None
-        names = [sympy.symbols(f'x_{i}', real = True) for i in range(self.X.shape[1])]
-
-        X_idxs = np.arange(self.X.shape[1])
-        X_poly = []
-        for degree in range(1, self.degree+1):   
-            for name in names: 
-                X_poly.append(name**degree)
-        X_interact = []
-        idxs = np.arange(0, self.X.shape[1], 1)
-        for combs in itertools.combinations(idxs, self.interactions):
-            x_inter = 1.0
-            for i in combs:
-                x_inter = x_inter * names[i]
-            X_interact.append(x_inter)
-
-        X_trig = []
-        for i in range(self.X.shape[1]):
-            X_trig.append(sympy.sin(names[i]))
-        for i in range(self.X.shape[1]):
-            X_trig.append(sympy.cos(names[i]))
-
-        expr = sympy.sympify(self.regr.intercept_)
-        for x_name, alpha in zip(X_poly + X_interact + X_trig, self.regr.coef_):
-            if abs(alpha) > 0.0:
-                expr += alpha*x_name
-        return expr
-
 class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
@@ -1704,6 +1595,115 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 ########################
 # New: Polynomial Feature Regressor
 # ########################
+class BaseReg():
+    '''
+    Regressor based on Linear combination of polynomials and trgonometric functions
+    '''
+    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, alpha:float = 0.0, max_terms:int = -1, interactions = 2, **params):
+        self.degree = degree
+        #self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
+        if alpha <= 0.0:
+            self.regr = LinearRegression()
+        else:
+            self.regr = Lasso(alpha = alpha, max_iter = 10000)
+        self.X = None
+        self.y = None
+        self.max_terms = max_terms
+        self.interactions = interactions
+        
+    def transform2poly(self, X):
+        # polynomials up to degree
+        # interactions up to interactions
+        X_poly = np.column_stack([X**(i+1) for i in range(self.degree)])
+        X_interact = []
+        idxs = np.arange(0, X.shape[1], 1)
+        for combs in itertools.combinations(idxs, self.interactions):
+            x_inter = np.prod(X[:, combs], axis=1)
+            X_interact.append(x_inter)
+        X_interact = np.column_stack(X_interact)
+        return np.column_stack([X_poly, X_interact])
+
+    def regression_p_values(self, X, y, reg):
+        """
+        Computes p-values using t-Test (null hyphotesis: c_i == 0)
+        """
+
+        yhat = reg.predict(X)
+        X_tmp = np.column_stack([np.ones(len(X)), X])
+        c_tmp = np.concatenate([np.array([reg.intercept_]), reg.coef_])
+        XtX_inv = np.linalg.inv(X_tmp.T@X_tmp)
+
+        df = len(X_tmp) - X_tmp.shape[1]
+        mse = sum((y - yhat)**2)/df
+        sd_err = np.sqrt(mse * XtX_inv.diagonal())
+        t_vals = c_tmp/sd_err
+        return 2 * (1 - stats.t.cdf(np.abs(t_vals), df))
+
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        
+        X_trig = np.column_stack([np.sin(self.X), np.cos(self.X)])
+        X_poly = self.transform2poly(X)
+        X_all = np.column_stack([X_poly, X_trig])
+
+        self.regr.fit(X_all, self.y)
+
+        if self.max_terms > 0:
+            # keep only top coefficients according to p value
+
+            current_coef = self.regr.coef_
+            
+            p_values = self.regression_p_values(X_all, y, self.regr)
+
+
+            supress_idxs = np.argsort(p_values[1:])[:-self.max_terms]
+            current_coef[supress_idxs] = 0.0
+            self.regr.coef_ = current_coef
+
+    def predict(self, X):
+        assert self.X is not None
+        X_trig = np.column_stack([np.sin(X), np.cos(X)])
+        X_poly = self.transform2poly(X)
+        
+        X_all = np.column_stack([X_poly, X_trig])
+        pred = self.regr.predict(X_all)
+        return pred
+
+    def model(self):
+        assert self.X is not None
+        names = [sympy.symbols(f'x_{i}', real = True) for i in range(self.X.shape[1])]
+
+        X_idxs = np.arange(self.X.shape[1])
+        X_poly = []
+        for degree in range(1, self.degree+1):   
+            for name in names: 
+                X_poly.append(name**degree)
+        X_interact = []
+        idxs = np.arange(0, self.X.shape[1], 1)
+        for combs in itertools.combinations(idxs, self.interactions):
+            x_inter = 1.0
+            for i in combs:
+                x_inter = x_inter * names[i]
+            X_interact.append(x_inter)
+
+        X_trig = []
+        for i in range(self.X.shape[1]):
+            X_trig.append(sympy.sin(names[i]))
+        for i in range(self.X.shape[1]):
+            X_trig.append(sympy.cos(names[i]))
+
+        expr = sympy.sympify(self.regr.intercept_)
+        for x_name, alpha in zip(X_poly + X_interact + X_trig, self.regr.coef_):
+            if abs(alpha) > 0.0:
+                expr += alpha*x_name
+        return expr
+
 
 class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
