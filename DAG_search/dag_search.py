@@ -1620,8 +1620,11 @@ class BaseReg():
         for combs in itertools.combinations(idxs, self.interactions):
             x_inter = np.prod(X[:, combs], axis=1)
             X_interact.append(x_inter)
-        X_interact = np.column_stack(X_interact)
-        return np.column_stack([X_poly, X_interact])
+        if len(X_interact) > 0:
+            X_interact = np.column_stack(X_interact)
+            return np.column_stack([X_poly, X_interact])
+        else:
+            return X_poly
 
     def regression_p_values(self, X, y, reg):
         """
