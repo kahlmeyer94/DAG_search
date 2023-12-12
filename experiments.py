@@ -633,45 +633,9 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
                 with open(save_path, 'wb') as handle:
                     pickle.dump(results_dict, handle) 
 
-def oscillation_experiment():
-    np.random.seed(0)
-    X = np.random.rand(100, 1)*1.5
-    y = np.exp(-X[:, 0])*np.cos(2*np.pi*X[:, 0])
-
-    save_path = 'results/oscillation.p'
-    if not os.path.exists('results'):
-        os.mkdir('results')
-
-    # try all regressors
-    regs = {
-        'linreg' : regressors.LinReg(),
-        'polyreg2' : regressors.PolyReg(degree= 2),
-        'polyreg3' : regressors.PolyReg(degree= 3),
-        'operon' : regressors.Operon(random_state = 0),
-        'gplearn' : regressors.GPlearn(random_state = 0),
-        'dsr' : regressors.DSR(),
-        'DAGSearch' : dag_search.DAGRegressor(processes = 10, random_state = 0), 
-    }
-    res_dict = {}
-    for reg_name in regs:
-        print(reg_name)
-        regressor = regs[reg_name]
-        regressor.fit(X, y)
-
-        res_dict[reg_name] = {
-            'X' : X,
-            'y' : y,
-            'pred' : regressor.predict(X),
-            'model' : regressor.model()
-        }
-        with open(save_path, 'wb') as handle:
-            pickle.dump(res_dict, handle) 
 
 
 if __name__ == '__main__':
-
-    if False:
-        oscillation_experiment()
 
     # Covariance experiment
     if False:
@@ -716,8 +680,8 @@ if __name__ == '__main__':
             #'operon' : (regressors.Operon(random_state = rand_state), True),
             #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
-            #'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state, n_calc_nodes = 5, max_orders = int(1e6)), True), 
-            'DAGSearch_poly' : (dag_search.PolySubRegressor(processes = 32, random_state = rand_state), True), 
+            'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
+            'DAGSearchAug' : (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
