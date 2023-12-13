@@ -1812,50 +1812,51 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
             for graph in res['graphs']:
                 repl_expr = graph.evaluate_symbolic()[0]
-                if verbose > 0:
+                if verbose > 0 and not found:
                     print(f'Replacement: {repl_expr}')
                 if not found:
                     X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X])
+                    if np.all(np.isfinite(X_new)):
+                        if not found:
+                            # fit using polynomial
+                            self.regr_poly.fit(X_new, y)
+                            pred = self.regr_poly.predict(X_new)
+                            score = r2_score(y, pred)
+                            scores.append(score)
 
-                    # fit using polynomial
-                    self.regr_poly.fit(X_new, y)
-                    pred = self.regr_poly.predict(X_new)
-                    score = r2_score(y, pred)
-                    scores.append(score)
+                            expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
+                            expr = self._translate(X, expr, repl_expr)
+                            expr = utils.simplify(expr)
+                            exprs.append(expr)
+                            if verbose > 0:
+                                print(f'Poly: {score}')
+                            if score == 1.0 and utils.tree_size(expr) < max_tree_size:
+                                if verbose > 0:
+                                    print(f'Expression is a polynomial on a substitution')
+                                    print(expr)
+                                found = True
+                                break
 
-                    expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
-                    expr = self._translate(X, expr, repl_expr)
-                    expr = utils.simplify(expr)
-                    exprs.append(expr)
-                    if verbose > 0:
-                        print(f'Poly: {score}')
-                    if score == 1.0 and utils.tree_size(expr) < max_tree_size:
-                        if verbose > 0:
-                            print(f'Expression is a polynomial on a substitution')
-                            print(expr)
-                        found = True
-                        break
+                        if not found:
+                            # fit using symbolic regressor
+                            self.regr_search.fit(X_new, y, verbose = verbose)
+                            pred = self.regr_search.predict(X_new)
+                            score = r2_score(y, pred)
+                            scores.append(score)
 
-                    # fit using symbolic regressor
-                    self.regr_search.fit(X_new, y, verbose = verbose)
-                    pred = self.regr_search.predict(X_new)
-                    score = r2_score(y, pred)
-                    scores.append(score)
-
-                    expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
-                    expr = self._translate(X, expr, repl_expr)
-                    expr = utils.simplify(expr)
-                    exprs.append(expr)
-                    if verbose > 0:
-                        print(f'DAG: {score}')
-                    if score == 1.0 and utils.tree_size(expr) < max_tree_size:
-                        if verbose > 0:
-                            print(f'Expression found trough exhaustive search with a substitution')
-                            print(expr)
-                        found = True
-                        break
+                            expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
+                            expr = self._translate(X, expr, repl_expr)
+                            expr = utils.simplify(expr)
+                            exprs.append(expr)
+                            if verbose > 0:
+                                print(f'DAG: {score}')
+                            if score == 1.0 and utils.tree_size(expr) < max_tree_size:
+                                if verbose > 0:
+                                    print(f'Expression found trough exhaustive search with a substitution')
+                                    print(expr)
+                                found = True
+                                break
                 
-
             if not found:
                 # fit original problem using symbolic regressor
                 if verbose > 0:

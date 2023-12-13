@@ -15,7 +15,7 @@ from DAG_search import dag_search
 from regressors import regressors as sregs
 
 
-def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2):
+def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2, overwrite:bool = False):
     '''
     Simple Experiment to estimate the Recovery rate of a Regressor.
 
@@ -25,6 +25,10 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
         regressor_name... name of regressor (for saving)
         is_symb... if regressor is symbolic
         test_size... share of test data
+    
+    @Returns:
+        saves dictionary:
+            [problem][criterium] = list of results for each dimension
     '''
     
     load_path = f'datasets/{ds_name}/tasks.p'
@@ -35,7 +39,11 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
     if not os.path.exists(f'results/{ds_name}'):
         os.mkdir(f'results/{ds_name}')
 
-    results = {}
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as handle:
+            results = pickle.load(handle)
+    else:    
+        results = {}
     with open(load_path, 'rb') as handle:
         task_dict = pickle.load(handle)
     problems = list(task_dict.keys())
@@ -45,61 +53,199 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
         print('####################')
         print(f'{regressor_name} on {problem}')
         print('####################')
+        
+        if (problem not in results) or overwrite:
 
-        X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+            X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
-        all_rec = []
-        all_pred_train = []
-        all_pred_test = []
-        all_y_train = []
-        all_y_test = []
-        all_expr = []
-        all_times = []
-
-
-        for idx in range(y.shape[1]):
-            expr_true = exprs_true[idx]
-            y_part = y_train[:, idx]
-
-            s_time = timer()
-            regressor.fit(X_train, y_part, verbose = 2)
-            e_time = timer()
-            all_times.append(e_time - s_time)
-
-            pred = regressor.predict(X_train)
-            all_pred_train.append(pred)
-            all_y_train.append(y_part)
-
-            pred = regressor.predict(X_test)
-            all_pred_test.append(pred)
-            all_y_test.append(y_test[:, idx])
+            all_rec = []
+            all_pred_train = []
+            all_pred_test = []
+            all_y_train = []
+            all_y_test = []
+            all_expr = []
+            all_times = []
 
 
+            for idx in range(y.shape[1]):
+                expr_true = exprs_true[idx]
+                y_part = y_train[:, idx]
 
-            if is_symb:
-                expr_est = regressor.model()
-                all_expr.append(expr_est)
-                rec = utils.symb_eq(expr_est, expr_true) 
-            else:
-                rec = False
-            all_rec.append(rec)
+                s_time = timer()
+                regressor.fit(X_train, y_part, verbose = 2)
+                e_time = timer()
+                all_times.append(e_time - s_time)
 
-            print(f'Recovery: {rec}')
+                pred = regressor.predict(X_train)
+                all_pred_train.append(pred)
+                all_y_train.append(y_part)
 
+                pred = regressor.predict(X_test)
+                all_pred_test.append(pred)
+                all_y_test.append(y_test[:, idx])
+
+
+
+                if is_symb:
+                    expr_est = regressor.model()
+                    all_expr.append(expr_est)
+                    rec = utils.symb_eq(expr_est, expr_true) 
+                else:
+                    rec = False
+                all_rec.append(rec)
+
+                print(f'Recovery: {rec}')
+
+        
+            results[problem] = {
+                'recovery' : all_rec,
+                'exprs' : all_expr,
+                'y_train' : all_y_train,
+                'y_test' : all_y_test,
+                'pred_train' : all_pred_train,
+                'pred_test' : all_pred_test,
+                'times' : all_times
+            }
+
+            with open(save_path, 'wb') as handle:
+                pickle.dump(results, handle)
+
+def scaling_experiment(ds_name : str, n_tries : int = 5, inter_nodes : list = [1, 2, 3, 4], orders :list = [10000, 50000, 100000, 200000], test_size : float = 0.2):
+    '''
+    Experiment to show that more compute = more recovery.
+    The two complexity parameters #internal nodes and #DAG frames are varied.
+
+    @Params:
+        ds_name... Name of dataset
+        n_tries... number of tries (different random states)
+        inter_nodes... list of number of internal nodes to try
+        orders... list of number of maximum DAG-frames to try
+        test_size... test share for testing
+
+    @Returns:
+        saves dictionary:
+            [rand_state][n_calc_nodes][max_orders][problem][criterium] = list of results for subproblem
+    '''
+
+    load_path = f'datasets/{ds_name}/tasks.p'
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    save_path = f'results/{ds_name}/scalings.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
     
-        results[problem] = {
-            'recovery' : all_rec,
-            'exprs' : all_expr,
-            'y_train' : all_y_train,
-            'y_test' : all_y_test,
-            'pred_train' : all_pred_train,
-            'pred_test' : all_pred_test,
-            'times' : all_times
-        }
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as handle:
+            res_dict = pickle.load(handle)
+    else:
+        res_dict = {}
 
-        with open(save_path, 'wb') as handle:
-            pickle.dump(results, handle)
+    for rand_state in range(n_tries):
+        if rand_state not in res_dict:
+            res_dict[rand_state] = {}
+        for n_calc_nodes in inter_nodes:
+            if n_calc_nodes not in res_dict[rand_state]:
+                res_dict[rand_state][n_calc_nodes] = {}
+            for max_orders in orders:
+                if max_orders not in res_dict[rand_state][n_calc_nodes]:
+                    res_dict[rand_state][n_calc_nodes][max_orders] = {}
+
+                regressor = dag_search.DAGRegressor(processes = 32, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
+                for problem in task_dict:
+                    if problem not in res_dict[rand_state][n_calc_nodes][max_orders]:
+                        res_dict[rand_state][n_calc_nodes][max_orders][problem] = {}
+                        print('####################')
+                        print(f'# Random State: {rand_state}, Nodes: {n_calc_nodes}, Orders: {max_orders}, Problem: {problem}')
+                        print('####################')
+
+                        X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
+
+                        all_rec = []
+                        all_expr = []
+                        all_times = []
+
+
+                        for idx in range(y.shape[1]):
+                            expr_true = exprs_true[idx]
+                            y_part = y[:, idx]
+
+                            s_time = timer()
+                            regressor.fit(X, y_part)
+                            e_time = timer()
+                            all_times.append(e_time - s_time)
+
+                            expr_est = regressor.model()
+                            all_expr.append(expr_est)
+                            rec = utils.symb_eq(expr_est, expr_true) 
+                            all_rec.append(rec)
+
+        
+                        res_dict[rand_state][n_calc_nodes][max_orders][problem] = {
+                            'recovery' : all_rec,
+                            'exprs' : all_expr,
+                            'times' : all_times
+                        }   
+                        with open(save_path, 'wb') as handle:
+                            pickle.dump(res_dict, handle) 
+
+def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], overwrite:bool = False):
+    '''
+    Simple Experiment to show parallelizability of DAGSearch on a Regression Problem.
+
+    @Params:
+        ds_name... Name of dataset
+        n_cores... number of cores to use
+    
+    @Returns:
+        saves dictionary:
+            [problem][n_cores] = time
+    '''
+    load_path = f'datasets/{ds_name}/tasks.p'
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    save_path = f'results/{ds_name}/timings.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
+    
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as handle:
+            res_dict = pickle.load(handle)
+    else:
+        res_dict = {}
+    
+    for problem in task_dict:
+        if problem not in res_dict:
+            res_dict[problem] = {}
+        for n_processes in n_cores:
+            regressor = dag_search.DAGRegressor(processes = n_processes, random_state = rand_state)
+
+            if (n_processes not in res_dict[problem]) or overwrite:
+                # do experiment
+                print('####################')
+                print(f'# Problem: {problem} Cores: {n_processes}')
+                print('####################')
+                X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
+                all_times = []
+                for idx in range(y.shape[1]):
+                    expr_true = exprs_true[idx]
+                    y_part = y[:, idx]
+
+                    s_time = timer()
+                    regressor.fit(X, y_part)
+                    e_time = timer()
+                    all_times.append(e_time - s_time)
+                res_dict[problem][n_processes] = all_times
+                with open(save_path, 'wb') as handle:
+                    pickle.dump(res_dict, handle) 
+
+###############################
+# OLD - not used in the paper
+###############################
 
 def proximity_experiment(random_state = None):
     # sample graphs
@@ -471,73 +617,6 @@ def local_minima_experiment(ds_name : str, n_graphs :int = 1000, max_tries : int
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle)
 
-def scaling_experiment(ds_name : str, n_tries : int = 5, inter_nodes : list = [1, 2, 3, 4], orders :list = [10000, 50000, 100000, 200000], test_size : float = 0.2):
-    
-    # how to access: [rand_state][n_calc_nodes][max_orders][problem]
-
-    load_path = f'datasets/{ds_name}/tasks.p'
-    with open(load_path, 'rb') as handle:
-        task_dict = pickle.load(handle)
-    save_path = f'results/{ds_name}/scalings.p'
-    if not os.path.exists('results'):
-        os.mkdir('results')
-    if not os.path.exists(f'results/{ds_name}'):
-        os.mkdir(f'results/{ds_name}')
-    
-    if os.path.exists(save_path):
-        with open(save_path, 'rb') as handle:
-            res_dict = pickle.load(handle)
-    else:
-        res_dict = {}
-
-    for rand_state in range(n_tries):
-        if rand_state not in res_dict:
-            res_dict[rand_state] = {}
-        for n_calc_nodes in inter_nodes:
-            if n_calc_nodes not in res_dict[rand_state]:
-                res_dict[rand_state][n_calc_nodes] = {}
-            for max_orders in orders:
-                if max_orders not in res_dict[rand_state][n_calc_nodes]:
-                    res_dict[rand_state][n_calc_nodes][max_orders] = {}
-
-                regressor = dag_search.DAGRegressor(processes = 10, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
-                for problem in task_dict:
-                    if problem not in res_dict[rand_state][n_calc_nodes][max_orders]:
-                        res_dict[rand_state][n_calc_nodes][max_orders][problem] = {}
-                        print('####################')
-                        print(f'# Random State: {rand_state}, Nodes: {n_calc_nodes}, Orders: {max_orders}, Problem: {problem}')
-                        print('####################')
-
-                        X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
-
-                        all_rec = []
-                        all_expr = []
-                        all_times = []
-
-
-                        for idx in range(y.shape[1]):
-                            expr_true = exprs_true[idx]
-                            y_part = y[:, idx]
-
-                            s_time = timer()
-                            regressor.fit(X, y_part)
-                            e_time = timer()
-                            all_times.append(e_time - s_time)
-
-                            expr_est = regressor.model()
-                            all_expr.append(expr_est)
-                            rec = utils.symb_eq(expr_est, expr_true) 
-                            all_rec.append(rec)
-
-        
-                        res_dict[rand_state][n_calc_nodes][max_orders][problem] = {
-                            'recovery' : all_rec,
-                            'exprs' : all_expr,
-                            'times' : all_times
-                        }   
-                        with open(save_path, 'wb') as handle:
-                            pickle.dump(res_dict, handle) 
-
 def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 10000):
     np.random.seed(0)
     # Problem
@@ -637,13 +716,7 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 
 if __name__ == '__main__':
 
-    # Covariance experiment
-    if False:
-        covariance_experiment('Strogatz')
-        covariance_experiment('Nguyen')
-        covariance_experiment('Univ')
-        covariance_experiment('Feynman')
-
+    
     # Scaling experiment
     if False:
         scaling_experiment('Strogatz')
@@ -651,26 +724,19 @@ if __name__ == '__main__':
         scaling_experiment('Univ')
         scaling_experiment('Feynman')
 
-    # Local Minima experiment
+    # Timing experiment
     if False:
-        local_minima_experiment('Feynman')
-        local_minima_experiment('Strogatz')
-        local_minima_experiment('Nguyen')
-        local_minima_experiment('Univ')
-
-    # Fitness-distance correlation experiment
-    if False:
-        fdc_experiment('Feynman')
-        fdc_experiment('Strogatz')
-        fdc_experiment('Nguyen')
-        fdc_experiment('Univ')
+        timing_experiment('Strogatz')
+        timing_experiment('Nguyen')
+        timing_experiment('Univ')
+        timing_experiment('Feynman')
 
     # Recovery experiment
     if True:
         overwrite = True
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        problems = ['Nguyen', 'Strogatz', 'Feynman', 'Univ', 'Kamke', 'Natural']
+        problems = ['Nguyen', 'Strogatz', 'Feynman', 'Univ']
 
         regs = {
             #'linreg' : (regressors.LinReg(), True),
@@ -680,8 +746,8 @@ if __name__ == '__main__':
             #'operon' : (regressors.Operon(random_state = rand_state), True),
             #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
             #'dsr' : (regressors.DSR(), True),
-            'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
-            'DAGSearchAug' : (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True), 
+            'DAGSearch' : (dag_search.DAGRegressor(processes = 16, random_state = rand_state), True), 
+            'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 16, random_state = rand_state), True), 
         }
         for ds_name in problems:
             for regressor_name in regs:
@@ -702,6 +768,29 @@ if __name__ == '__main__':
                 regressor, is_symb = regs[regressor_name]
                 recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
 
+    # OLD - not used in the paper
+
+    # Covariance experiment
+    if False:
+        covariance_experiment('Strogatz')
+        covariance_experiment('Nguyen')
+        covariance_experiment('Univ')
+        covariance_experiment('Feynman')
+
     # proximity experiment
     if False:
         proximity_experiment(0)
+
+    # Local Minima experiment
+    if False:
+        local_minima_experiment('Feynman')
+        local_minima_experiment('Strogatz')
+        local_minima_experiment('Nguyen')
+        local_minima_experiment('Univ')
+
+    # Fitness-distance correlation experiment
+    if False:
+        fdc_experiment('Feynman')
+        fdc_experiment('Strogatz')
+        fdc_experiment('Nguyen')
+        fdc_experiment('Univ')
