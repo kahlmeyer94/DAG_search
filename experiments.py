@@ -222,7 +222,7 @@ def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], over
         if problem not in res_dict:
             res_dict[problem] = {}
         for n_processes in n_cores:
-            regressor = dag_search.DAGRegressor(processes = n_processes, random_state = rand_state)
+            regressor = dag_search.DAGRegressor(processes = n_processes, random_state = rand_state, n_calc_nodes = 2)
 
             if (n_processes not in res_dict[problem]) or overwrite:
                 # do experiment
@@ -717,21 +717,21 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 if __name__ == '__main__':
 
     
-    # Scaling experiment
+    # Scaling experiment [todo]
     if False:
         scaling_experiment('Strogatz')
         scaling_experiment('Nguyen')
         scaling_experiment('Univ')
         scaling_experiment('Feynman')
 
-    # Timing experiment
+    # Timing experiment [todo]
     if False:
         timing_experiment('Strogatz')
         timing_experiment('Nguyen')
         timing_experiment('Univ')
         timing_experiment('Feynman')
 
-    # Recovery experiment
+    # Recovery experiment [running]
     if True:
         overwrite = True
         rand_state = 0
@@ -755,7 +755,7 @@ if __name__ == '__main__':
                     regressor, is_symb = regs[regressor_name]
                     recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
 
-    # ESR recovery experiment
+    # ESR recovery experiment [done]
     if False:
         overwrite = False
         rand_state = 0
