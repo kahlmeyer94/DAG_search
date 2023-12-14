@@ -111,7 +111,7 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
             with open(save_path, 'wb') as handle:
                 pickle.dump(results, handle)
 
-def scaling_experiment(ds_name : str, n_tries : int = 5, inter_nodes : list = [1, 2, 3, 4], orders :list = [10000, 50000, 100000, 200000], test_size : float = 0.2):
+def scaling_experiment(ds_name : str, n_tries : int = 5, inter_nodes : list = [1, 2, 3, 4], orders :list = [10000, 20000, 40000, 80000], test_size : float = 0.2):
     '''
     Experiment to show that more compute = more recovery.
     The two complexity parameters #internal nodes and #DAG frames are varied.
@@ -718,13 +718,13 @@ if __name__ == '__main__':
 
     
     # Scaling experiment [todo]
-    if False:
+    if True:
         scaling_experiment('Strogatz')
         scaling_experiment('Nguyen')
         scaling_experiment('Univ')
         scaling_experiment('Feynman')
 
-    # Timing experiment [running]
+    # Timing experiment [done]
     if True:
         timing_experiment('Strogatz')
         timing_experiment('Nguyen')
