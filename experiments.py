@@ -191,7 +191,7 @@ def scaling_experiment(ds_name : str, n_tries : int = 5, inter_nodes : list = [1
                         with open(save_path, 'wb') as handle:
                             pickle.dump(res_dict, handle) 
 
-def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], overwrite:bool = False):
+def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], overwrite:bool = True):
     '''
     Simple Experiment to show parallelizability of DAGSearch on a Regression Problem.
 
@@ -222,7 +222,7 @@ def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], over
         if problem not in res_dict:
             res_dict[problem] = {}
         for n_processes in n_cores:
-            regressor = dag_search.DAGRegressor(processes = n_processes, random_state = rand_state, n_calc_nodes = 2)
+            regressor = dag_search.DAGRegressor(processes = n_processes, random_state = 0, n_calc_nodes = 2, max_orders = int(1e4))
 
             if (n_processes not in res_dict[problem]) or overwrite:
                 # do experiment
@@ -724,15 +724,15 @@ if __name__ == '__main__':
         scaling_experiment('Univ')
         scaling_experiment('Feynman')
 
-    # Timing experiment [todo]
-    if False:
+    # Timing experiment [running]
+    if True:
         timing_experiment('Strogatz')
         timing_experiment('Nguyen')
         timing_experiment('Univ')
         timing_experiment('Feynman')
 
-    # Recovery experiment [running]
-    if True:
+    # Recovery experiment [done]
+    if False:
         overwrite = True
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
