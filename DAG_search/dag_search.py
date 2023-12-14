@@ -752,7 +752,7 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
     else:
         return np.array([]), np.inf
         
-def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None, start_time:float = None, max_time:float = 3600) -> tuple:
+def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None, start_time:float = None, max_time:float = 3600, pareto:bool = False) -> tuple:
     '''
     Given a build order (output of get_build_orders), tests all possible assignments of operators.
 
@@ -768,6 +768,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
         loss_thresh... only set in multiprocessing context - to communicate between processes for early stopping
         start_time... if set, will not evaluate any orders after max_time seconds from start time
         max_time... if set, will not evaluate any orders after max_time seconds from start time
+        pareto... if set, will return the pareto front instead of the top k
 
     @Returns:
         tuple:
@@ -785,6 +786,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
     ret_consts = []
     ret_losses = []
     ret_ops = []
+
     max_loss = np.inf
     max_idx = None
 
@@ -853,8 +855,23 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                                 inv_array = np.row_stack([inv_array, tmp])
                             inv_mask = (inv_array > 0).astype(int)
                     
-
-                if (len(ret_losses) < topk):
+                if (len(ret_losses) == 0):
+                    ret_consts.append(consts)
+                    ret_losses.append(loss)
+                    ret_ops.append(ops)
+                elif pareto:
+                    # check which entries it dominates
+                    dominated_entries = []
+                    for i, (pareto_loss, pareto_ops) in enumerate(zip(ret_losses, ret_ops)):
+                        if pareto_loss > loss and len(pareto_ops) > len(ops):
+                            dominated_entries.append(i)
+                    # keep only non dominated entries
+                    if len(dominated_entries) > 0:
+                        ret_consts = [consts] + [ret_consts[i] for i in range(len(ret_consts)) if i not in dominated_entries]
+                        ret_losses = [loss] + [ret_losses[i] for i in range(len(ret_consts)) if i not in dominated_entries]
+                        ret_ops = [ops] + [ret_ops[i] for i in range(len(ret_consts)) if i not in dominated_entries]
+                    
+                elif (len(ret_losses) < topk):
                     # append
                     ret_consts.append(consts)
                     ret_losses.append(loss)
@@ -863,7 +880,6 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                     max_idx = np.argmax(ret_losses)
                     max_loss = ret_losses[max_idx]
                 else:
-
                     if loss < max_loss:
                         # replace
                         ret_consts[max_idx] = consts
@@ -994,7 +1010,7 @@ def is_pickleable(x:object) -> bool:
     except (pickle.PicklingError, AttributeError):
         return False
 
-def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 3600.0, stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 3600.0, stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
     '''
     Exhaustive search for a DAG.
 
@@ -1013,6 +1029,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         max_size... will only return at most this many graphs (sorted by loss)
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
         unique_loss... only take graph into topk if it has a totally new loss
+        pareto... if set, will return the pareto front instead of the top k
     @Returns:
         dictionary with:
             graphs -> list of computational DAGs
@@ -1062,33 +1079,51 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             pbar = orders
         for order in pbar:
             consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time)
-            for c, loss, op in zip(consts, losses, ops):
-                
-                if loss <= loss_thresh:
-                    if unique_loss:
-                        valid = loss not in top_losses
-                    else:
-                        valid = True
+            
+            if pareto:
+                # TODO: does this work?
+                top_losses += losses
+                top_consts += consts
+                top_ops += ops
+                top_orders += [order]*len(losses)
 
-                    if valid:
-                        if len(top_losses) >= topk:
-                            repl_idx = np.argmax(top_losses)
-                            top_consts[repl_idx] = c
-                            top_losses[repl_idx] = loss
-                            top_ops[repl_idx] = op
-                            top_orders[repl_idx] = order
+                complexities = [len(op) for op in top_ops]
+                pareto_idxs = utils.get_pareto_idxs(top_losses, complexities)
+
+                top_losses = [top_losses[i] for i in pareto_idxs]
+                top_consts = [top_consts[i] for i in pareto_idxs]
+                top_ops = [top_ops[i] for i in pareto_idxs]
+                top_orders = [top_orders[i] for i in pareto_idxs]
+
+                early_stop = np.any(np.array(top_losses) < stop_thresh)
+            else:
+                for c, loss, op in zip(consts, losses, ops):
+                    
+                    if loss <= loss_thresh:
+                        if unique_loss:
+                            valid = loss not in top_losses
                         else:
-                            top_consts.append(c)
-                            top_losses.append(loss)
-                            top_ops.append(op)
-                            top_orders.append(order)
-                        
-                        loss_thresh = np.max(top_losses)
-                        if verbose == 2:
-                            pbar.set_postfix({'best_loss' : np.min(top_losses)})
-                if loss < stop_thresh:
-                    early_stop = True
-                    break
+                            valid = True
+
+                        if valid:
+                            if len(top_losses) >= topk:
+                                repl_idx = np.argmax(top_losses)
+                                top_consts[repl_idx] = c
+                                top_losses[repl_idx] = loss
+                                top_ops[repl_idx] = op
+                                top_orders[repl_idx] = order
+                            else:
+                                top_consts.append(c)
+                                top_losses.append(loss)
+                                top_ops.append(op)
+                                top_orders.append(order)
+                            
+                            loss_thresh = np.max(top_losses)
+                            if verbose == 2:
+                                pbar.set_postfix({'best_loss' : np.min(top_losses)})
+                    if loss < stop_thresh:
+                        early_stop = True
+                        break
             if early_stop:
                 break
     else:
