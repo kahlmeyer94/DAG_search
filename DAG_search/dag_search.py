@@ -1643,7 +1643,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(2e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, max_time:float = 800.0, positives:list = None, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(2e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, max_time:float = 800.0, positives:list = None, pareto:bool = False, results:dict = {}, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1656,6 +1656,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             mode... one of 'exhaustive' or 'hierarchical'
             loss_fkt... loss function class
             positives... marks which X are strictly positive
+            pareto... flag for exhaustive search
         '''
         self.k = k
         self.n_calc_nodes = n_calc_nodes
@@ -1670,6 +1671,8 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.random_state = random_state
         self.loss_fkt = loss_fkt
         self.positives = positives
+        self.pareto = pareto
+        self.results = results
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
@@ -1712,12 +1715,14 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'verbose' : verbose,
             'max_orders' : self.max_orders, 
             'stop_thresh' : self.stop_thresh,
-            'max_time' : self.max_time
+            'max_time' : self.max_time,
+            'pareto' : self.pareto
         }
         if self.mode == 'hierarchical':
             res = hierarchical_search(**params)
         else:
             res = exhaustive_search(**params)
+        self.results = res
 
         if len(res['graphs']) > 0:
             # optimizing constants of top DAGs
