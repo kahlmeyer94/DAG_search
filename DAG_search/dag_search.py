@@ -1143,7 +1143,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
                 break
     else:
 
-        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time] for order in orders]
+        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time, pareto] for order in orders]
         if verbose == 2:
             pbar = tqdm(args, total = len(args))
         else:
@@ -1227,7 +1227,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
 
     return ret
 
-def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', n_samples:int = int(1e4), stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', n_samples:int = int(1e4), stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
     '''
     Sampling search for a DAG.
 
@@ -1244,6 +1244,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
         n_samples... number of random graphs to check
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
         unique_loss... only take graph into topk if it has a totally new loss
+        pareto... if set, will return the pareto front instead of the top k
     @Returns:
         dictionary with:
             graphs -> list of computational DAGs
@@ -1290,7 +1291,25 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
             pbar = cgraphs
         for cgraph in pbar:
             c, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode)
-            if loss <= loss_thresh:
+
+            if pareto:
+                # does this loss + graph dominate anyone completely?
+                # check which entries it dominates
+                dominated_entries = []
+                for i, (pareto_loss, pareto_graph) in enumerate(zip(top_losses, top_graphs)):
+                    if pareto_loss >= loss and len(pareto_graph.node_dict) >= len(cgraph.node_dict):
+                        dominated_entries.append(i)
+                # keep only non dominated entries
+                if len(dominated_entries) > 0:
+                    top_consts = [c] + [top_consts[i] for i in range(len(top_consts)) if i not in dominated_entries]
+                    top_losses = [loss] + [top_losses[i] for i in range(len(top_consts)) if i not in dominated_entries]
+                    top_graphs = [cgraph] + [top_graphs[i] for i in range(len(top_consts)) if i not in dominated_entries]           
+
+                    if verbose == 2:
+                        pbar.set_postfix({'best_loss' : np.min(top_losses), 'n_pareto' : len(top_losses)})
+
+
+            elif loss <= loss_thresh:
                 if unique_loss:
                     valid = loss not in top_losses
                 else:
@@ -1327,7 +1346,26 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 
 
         for i, (c, loss) in enumerate(pool_results):
-            if loss <= loss_thresh:
+
+            if pareto:
+                # does this loss + graph dominate anyone completely?
+                # check which entries it dominates
+                dominated_entries = []
+                for j, (pareto_loss, pareto_graph) in enumerate(zip(top_losses, top_graphs)):
+                    if pareto_loss >= loss and len(pareto_graph.node_dict) >= len(cgraphs[i].node_dict):
+                        dominated_entries.append(j)
+                # keep only non dominated entries
+                if len(dominated_entries) > 0:
+                    top_consts = [c] + [top_consts[j] for j in range(len(top_consts)) if j not in dominated_entries]
+                    top_losses = [loss] + [top_losses[j] for j in range(len(top_consts)) if j not in dominated_entries]
+                    top_graphs = [cgraphs[i]] + [top_graphs[j] for j in range(len(top_consts)) if j not in dominated_entries]           
+
+                    if verbose == 2:
+                        pbar.set_postfix({'best_loss' : np.min(top_losses), 'n_pareto' : len(top_losses)})
+
+
+
+            elif loss <= loss_thresh:
                 if unique_loss:
                     valid = loss not in top_losses
                 else:
@@ -1345,6 +1383,8 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
                         top_graphs.append(cgraphs[i].copy())
                     
                     loss_thresh = np.max(top_losses)
+                    if verbose == 2:
+                        pbar.set_postfix({'best_loss' : np.min(top_losses)})
 
     sort_idx = np.argsort(top_losses)
     top_graphs = [top_graphs[i] for i in sort_idx]
@@ -1358,7 +1398,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 
     return ret
 
-def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 3600.0, stop_thresh:float = -1.0, hierarchy_stop_thresh:float = -1.0, unique_loss:bool = True, **params) -> dict:
+def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 3600.0, stop_thresh:float = -1.0, hierarchy_stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
     '''
     Exhaustive search for a DAG but hierarchical.
 
@@ -1378,6 +1418,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
         stop_thresh... if loss is lower than this, will stop evaluation (only for single process)
         hierarchy_stop_thresh... if loss of any top performer is lower than this, will stop after hierarchy step
         unique_loss... only take graph into topk if it has a totally new loss
+        pareto... if set, will return the pareto front instead of the top k
     @Returns:
         dictionary with:
             graphs -> list of computational DAGs
@@ -1436,38 +1477,71 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             else:
                 pbar = orders
             for order in pbar:
-                consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time)
-                for c, loss, op in zip(consts, losses, ops):
-                    
-                    if loss <= loss_thresh:
-                        if unique_loss:
-                            valid = loss not in top_losses
-                        else:
-                            valid = True
-
-                        if valid:
-                            if len(top_losses) >= topk:
-                                repl_idx = np.argmax(top_losses)
-                                top_consts[repl_idx] = c
-                                top_losses[repl_idx] = loss
-                                top_ops[repl_idx] = op
-                                top_orders[repl_idx] = order
-                            else:
-                                top_consts.append(c)
-                                top_losses.append(loss)
-                                top_ops.append(op)
-                                top_orders.append(order)
-                            
-                            loss_thresh = np.max(top_losses)
-                            if verbose == 2:
-                                pbar.set_postfix({'best_loss' : np.min(top_losses)})
-                    if loss < stop_thresh:
-                        early_stop = True
-                        break
                 if early_stop:
                     break
+
+                consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time, pareto=pareto)
+                
+                if pareto:
+                    top_losses += losses
+                    top_consts += consts
+                    top_ops += ops
+                    top_orders += [order]*len(losses)
+                    
+                    complexities = [len(op) for op in top_ops]
+                    pareto_idxs = utils.get_pareto_idxs(top_losses, complexities)
+
+                    if unique_loss:
+                        pareto_losses = set()
+                        take_idxs = []
+                        for j in pareto_idxs:
+                            v = np.round(top_losses[j], 15)
+                            if v not in pareto_losses:
+                                pareto_losses.add(v)
+                                take_idxs.append(j)
+                    else:
+                        take_idxs = pareto_idxs
+                    
+                    top_losses = [top_losses[i] for i in take_idxs]
+                    top_consts = [top_consts[i] for i in take_idxs]
+                    top_ops = [top_ops[i] for i in take_idxs]
+                    top_orders = [top_orders[i] for i in take_idxs]
+
+
+                
+                    if verbose == 2:
+                        pbar.set_postfix({'best_loss' : np.min(top_losses), 'n_pareto' : len(top_losses)})
+
+                
+                else:
+                    for c, loss, op in zip(consts, losses, ops):
+                        if loss <= loss_thresh:
+                            if unique_loss:
+                                valid = loss not in top_losses
+                            else:
+                                valid = True
+
+                            if valid:
+                                if len(top_losses) >= topk:
+                                    repl_idx = np.argmax(top_losses)
+                                    top_consts[repl_idx] = c
+                                    top_losses[repl_idx] = loss
+                                    top_ops[repl_idx] = op
+                                    top_orders[repl_idx] = order
+                                else:
+                                    top_consts.append(c)
+                                    top_losses.append(loss)
+                                    top_ops.append(op)
+                                    top_orders.append(order)
+                                
+                                loss_thresh = np.max(top_losses)
+                                if verbose == 2:
+                                    pbar.set_postfix({'best_loss' : np.min(top_losses)})
+                early_stop = np.any(np.array(top_losses) < stop_thresh)
+
+
         else:
-            args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time- setup_time] for order in orders]
+            args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time- setup_time, pareto] for order in orders]
             if verbose == 2:
                 pbar = tqdm(args, total = len(args))
             else:
@@ -1476,31 +1550,65 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             with ctx.Pool(processes=n_processes, initializer=init_process, initargs=(early_stop,)) as pool:
                 pool_results = pool.starmap(evaluate_build_order, pbar)
 
-            for i, (consts, losses, ops) in enumerate(pool_results):
-                for c, loss, op in zip(consts, losses, ops):
-                    if loss <= loss_thresh:
-                        if unique_loss:
-                            valid = loss not in top_losses
-                        else:
-                            valid = True
 
-                        if valid:
-                            if len(top_losses) >= topk:
-                                repl_idx = np.argmax(top_losses)
-                                top_consts[repl_idx] = c
-                                top_losses[repl_idx] = loss
-                                top_ops[repl_idx] = op
-                                top_orders[repl_idx] = orders[i]
+            for i, (consts, losses, ops) in enumerate(pool_results):
+                if early_stop:
+                    break
+
+                if pareto:
+                    top_losses += losses
+                    top_consts += consts
+                    top_ops += ops
+                    top_orders += [orders[i]]*len(losses)
+                    
+                    complexities = [len(op) for op in top_ops]
+                    pareto_idxs = utils.get_pareto_idxs(top_losses, complexities)
+
+                    if unique_loss:
+                        pareto_losses = set()
+                        take_idxs = []
+                        for j in pareto_idxs:
+                            v = np.round(top_losses[j], 15)
+                            if v not in pareto_losses:
+                                pareto_losses.add(v)
+                                take_idxs.append(j)
+                    else:
+                        take_idxs = pareto_idxs
+                    
+                    top_losses = [top_losses[j] for j in take_idxs]
+                    top_consts = [top_consts[j] for j in take_idxs]
+                    top_ops = [top_ops[j] for j in take_idxs]
+                    top_orders = [top_orders[j] for j in take_idxs]
+                    
+                    if verbose == 2:
+                        pbar.set_postfix({'best_loss' : np.min(top_losses), 'n_pareto' : len(top_losses)})
+
+
+                else:
+                    for c, loss, op in zip(consts, losses, ops):
+                        if loss <= loss_thresh:
+                            if unique_loss:
+                                valid = loss not in top_losses
                             else:
-                                top_consts.append(c)
-                                top_losses.append(loss)
-                                top_ops.append(op)
-                                top_orders.append(orders[i])
-                            
-                            loss_thresh = np.max(top_losses)
-                            if verbose == 2:
-                                pbar.set_postfix({'best_loss' : np.min(top_losses)})
-                
+                                valid = True
+
+                            if valid:
+                                if len(top_losses) >= topk:
+                                    repl_idx = np.argmax(top_losses)
+                                    top_consts[repl_idx] = c
+                                    top_losses[repl_idx] = loss
+                                    top_ops[repl_idx] = op
+                                    top_orders[repl_idx] = orders[i]
+                                else:
+                                    top_consts.append(c)
+                                    top_losses.append(loss)
+                                    top_ops.append(op)
+                                    top_orders.append(orders[i])
+                                
+                                loss_thresh = np.max(top_losses)
+                                if verbose == 2:
+                                    pbar.set_postfix({'best_loss' : np.min(top_losses)})
+                early_stop = np.any(np.array(top_losses) < stop_thresh)
 
         sort_idx = np.argsort(top_losses)
         top_losses = [top_losses[i] for i in sort_idx]
