@@ -16,7 +16,7 @@ def get_pareto_idxs(obj1, obj2):
     M = np.column_stack([obj1, obj2])
     ret = []
     for i, p in enumerate(M):
-        is_dominated = np.any(np.all(M < p, axis = 1))
+        is_dominated = (np.all(M <= p, axis = 1) & np.any(M != p, axis = 1)).sum() > 1
         if not is_dominated:
             ret.append(i)
     return np.array(ret)

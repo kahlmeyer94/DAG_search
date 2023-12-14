@@ -863,7 +863,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                     # check which entries it dominates
                     dominated_entries = []
                     for i, (pareto_loss, pareto_ops) in enumerate(zip(ret_losses, ret_ops)):
-                        if pareto_loss > loss and len(pareto_ops) > len(ops):
+                        if pareto_loss >= loss and len(pareto_ops) >= len(ops):
                             dominated_entries.append(i)
                     # keep only non dominated entries
                     if len(dominated_entries) > 0:
@@ -1078,22 +1078,37 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         else:
             pbar = orders
         for order in pbar:
-            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time)
+            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time, pareto=pareto)
             
             if pareto:
-                # TODO: does this work?
                 top_losses += losses
                 top_consts += consts
                 top_ops += ops
                 top_orders += [order]*len(losses)
-
+                
                 complexities = [len(op) for op in top_ops]
                 pareto_idxs = utils.get_pareto_idxs(top_losses, complexities)
 
-                top_losses = [top_losses[i] for i in pareto_idxs]
-                top_consts = [top_consts[i] for i in pareto_idxs]
-                top_ops = [top_ops[i] for i in pareto_idxs]
-                top_orders = [top_orders[i] for i in pareto_idxs]
+                if unique_loss:
+                    pareto_losses = set()
+                    take_idxs = []
+                    for j in pareto_idxs:
+                        v = np.round(top_losses[j], 15)
+                        if v not in pareto_losses:
+                            pareto_losses.add(v)
+                            take_idxs.append(j)
+                else:
+                    take_idxs = pareto_idxs
+                
+                top_losses = [top_losses[i] for i in take_idxs]
+                top_consts = [top_consts[i] for i in take_idxs]
+                top_ops = [top_ops[i] for i in take_idxs]
+                top_orders = [top_orders[i] for i in take_idxs]
+
+
+                
+                if verbose == 2:
+                    pbar.set_postfix({'best_loss' : np.min(top_losses), 'n_pareto' : len(top_losses)})
 
                 early_stop = np.any(np.array(top_losses) < stop_thresh)
             else:
@@ -1137,29 +1152,64 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         with ctx.Pool(processes=n_processes, initializer=init_process, initargs=(early_stop,)) as pool:
             pool_results = pool.starmap(evaluate_build_order, pbar)
         for i, (consts, losses, ops) in enumerate(pool_results):
-            for c, loss, op in zip(consts, losses, ops):
-                if loss <= loss_thresh:
-                    if unique_loss:
-                        valid = loss not in top_losses
-                    else:
-                        valid = True
+            if early_stop:
+                break
+            if pareto:
+                top_losses += losses
+                top_consts += consts
+                top_ops += ops
+                top_orders += [orders[i]]*len(losses)
+                
+                complexities = [len(op) for op in top_ops]
+                pareto_idxs = utils.get_pareto_idxs(top_losses, complexities)
 
-                    if valid:
-                        if len(top_losses) >= topk:
-                            repl_idx = np.argmax(top_losses)
-                            top_consts[repl_idx] = c
-                            top_losses[repl_idx] = loss
-                            top_ops[repl_idx] = op
-                            top_orders[repl_idx] = orders[i]
+                if unique_loss:
+                    pareto_losses = set()
+                    take_idxs = []
+                    for j in pareto_idxs:
+                        v = np.round(top_losses[j], 15)
+                        if v not in pareto_losses:
+                            pareto_losses.add(v)
+                            take_idxs.append(j)
+                else:
+                    take_idxs = pareto_idxs
+                
+                top_losses = [top_losses[j] for j in take_idxs]
+                top_consts = [top_consts[j] for j in take_idxs]
+                top_ops = [top_ops[j] for j in take_idxs]
+                top_orders = [top_orders[j] for j in take_idxs]
+                
+                if verbose == 2:
+                    pbar.set_postfix({'best_loss' : np.min(top_losses), 'n_pareto' : len(top_losses)})
+
+                early_stop = np.any(np.array(top_losses) < stop_thresh)
+            else:
+                for c, loss, op in zip(consts, losses, ops):
+                    if loss <= loss_thresh:
+                        if unique_loss:
+                            valid = loss not in top_losses
                         else:
-                            top_consts.append(c)
-                            top_losses.append(loss)
-                            top_ops.append(op)
-                            top_orders.append(orders[i])
-                        
-                        loss_thresh = np.max(top_losses)
-                        if verbose == 2:
-                            pbar.set_postfix({'best_loss' : np.min(top_losses)})
+                            valid = True
+
+                        if valid:
+                            if len(top_losses) >= topk:
+                                repl_idx = np.argmax(top_losses)
+                                top_consts[repl_idx] = c
+                                top_losses[repl_idx] = loss
+                                top_ops[repl_idx] = op
+                                top_orders[repl_idx] = orders[i]
+                            else:
+                                top_consts.append(c)
+                                top_losses.append(loss)
+                                top_ops.append(op)
+                                top_orders.append(orders[i])
+                            
+                            loss_thresh = np.max(top_losses)
+                            if verbose == 2:
+                                pbar.set_postfix({'best_loss' : np.min(top_losses)})
+                    if loss < stop_thresh:
+                        early_stop = True
+                        break
 
     sort_idx = np.argsort(top_losses)
     top_losses = [top_losses[i] for i in sort_idx]
