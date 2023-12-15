@@ -2001,6 +2001,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             res = exhaustive_search(**params)
 
             # try top substitutions
+            tried_subs = []
             scores = []
             exprs = []
 
@@ -2012,7 +2013,9 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 repl_expr = graph.evaluate_symbolic()[0]
                 if verbose > 0 and not found:
                     print(f'Replacement: {repl_expr}')
-                if not found:
+                if (not found) and (str(repl_expr) not in tried_subs):
+                    tried_subs.append(str(repl_expr))
+
                     X_new = np.column_stack([graph.evaluate(X, np.array([]))[:, 0], X])
                     if np.all(np.isfinite(X_new)):
                         if not found:
