@@ -859,6 +859,9 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                     ret_consts.append(consts)
                     ret_losses.append(loss)
                     ret_ops.append(ops)
+                    max_idx = np.argmax(ret_losses)
+                    max_loss = ret_losses[max_idx]
+
                 elif pareto:
                     # check which entries it dominates
                     dominated_entries = []
@@ -1643,7 +1646,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(2e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, results:dict = {}, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(2e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1672,7 +1675,6 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.loss_fkt = loss_fkt
         self.positives = positives
         self.pareto = pareto
-        self.results = results
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
