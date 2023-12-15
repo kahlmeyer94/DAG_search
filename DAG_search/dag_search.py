@@ -1929,6 +1929,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         max_tree_size = self.max_tree_size
+        fit_thresh = 0.99999
 
         if self.random_state is not None:
             np.random.seed(self.random_state)
@@ -1951,7 +1952,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             test_scores.append(s_test)
             
             expr = utils.simplify(utils.round_floats(self.regr_poly.model(), round_digits=5))
-            if s_train == 1.0 and s_test == 1.0 and utils.tree_size(expr) < max_tree_size:
+            if s_train >= fit_thresh and s_test >= fit_thresh and utils.tree_size(expr) < max_tree_size:
                 found = True
                 break
 
@@ -2027,13 +2028,14 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                             score = r2_score(y, pred)
                             scores.append(score)
 
-                            expr = utils.round_floats(self.regr_poly.model(), round_digits = 5)
+                            expr = utils.round_floats(self.regr_poly.model(), round_digits = 3)
                             expr = self._translate(X, expr, repl_expr)
                             expr = utils.simplify(expr)
                             exprs.append(expr)
+                            ts = utils.tree_size(expr)
                             if verbose > 0:
-                                print(f'Poly: {score}')
-                            if score == 1.0 and utils.tree_size(expr) < max_tree_size:
+                                print(f'Poly: {score}, Size: {ts}')
+                            if score >= fit_thresh and ts < max_tree_size:
                                 if verbose > 0:
                                     print(f'Expression is a polynomial on a substitution')
                                     print(expr)
@@ -2047,13 +2049,14 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                             score = r2_score(y, pred)
                             scores.append(score)
 
-                            expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
+                            expr = utils.round_floats(self.regr_search.model(), round_digits = 3)
                             expr = self._translate(X, expr, repl_expr)
                             expr = utils.simplify(expr)
                             exprs.append(expr)
+                            ts = utils.tree_size(expr)
                             if verbose > 0:
-                                print(f'DAG: {score}')
-                            if score == 1.0 and utils.tree_size(expr) < max_tree_size:
+                                print(f'DAG: {score} Size: {ts}')
+                            if score >= fit_thresh and ts < max_tree_size:
                                 if verbose > 0:
                                     print(f'Expression found trough exhaustive search with a substitution')
                                     print(expr)
@@ -2073,7 +2076,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
 
             scores = np.array(scores)
-            if scores[-1] > (1-1e-20):
+            if scores[-1] >= fit_thresh:
                 # take optimal model
                 self.expr = exprs[-1]
                 self.pareto_front = [self.expr]
