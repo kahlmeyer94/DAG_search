@@ -261,14 +261,14 @@ class SymSep(Simplification):
 def get_simpl(X, y):
     if X.shape[1] > 1:
         # 1. use Polynomial to fit
-        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         polydegrees = np.arange(1, 10, 1)
         rmses = []
         for degree in polydegrees:
             f_appr = dag_search.BaseReg(degree = degree)
-            f_appr.fit(X, y)
-            pred = f_appr.predict(X)
-            rmse = np.sqrt(np.mean((y - pred)**2))
+            f_appr.fit(X_train, y_train)
+            pred = f_appr.predict(X_test)
+            rmse = np.sqrt(np.mean((y_test - pred)**2))
             rmses.append(rmse)
             if rmse < 1e-5:
                 break
@@ -281,11 +281,10 @@ def get_simpl(X, y):
         sym_sep = SymSep(f_appr)
         sym_sep.find(X, y)
         error = sym_sep.error        
-        #print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
+        print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
         return sym_sep
             
     return None
-
 
 class SimplNode():
     def __init__(self, X, y, parent = None, children = [], simpl:Simplification = None) -> None:
@@ -326,7 +325,6 @@ class SimplNode():
             self.expr = self.simpl.expr
         
         return self.expr
-
 
 class SimplTree():
     '''
@@ -435,6 +433,8 @@ class SimplificationRegressor(sklearn.base.BaseEstimator, sklearn.base.Regressor
 
         max_depth = self.simpl_tree.tree_depth
         for depth in range(max_depth + 1):
+            if verbose > 0:
+                print(f'depth: {depth}')
             self.simpl_tree.clear(self.simpl_tree.root) # remove all expressions
             subproblems = self.simpl_tree.get_subproblems(depth)
             sub_exprs = []
