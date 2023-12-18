@@ -718,14 +718,14 @@ if __name__ == '__main__':
 
     
     # Scaling experiment [todo]
-    if True:
+    if False:
         scaling_experiment('Strogatz')
         scaling_experiment('Nguyen')
         scaling_experiment('Univ')
         scaling_experiment('Feynman')
 
     # Timing experiment [done]
-    if True:
+    if False:
         timing_experiment('Strogatz')
         timing_experiment('Nguyen')
         timing_experiment('Univ')
