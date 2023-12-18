@@ -1917,7 +1917,7 @@ class BaseReg():
                 X_poly.append(name**degree)
         X_interact = []
 
-        for combs in itertools.combinations(X_idxs, self.interactions):
+        for combs in itertools.combinations_with_replacement(X_idxs, self.interactions):
             x_inter = 1.0
             ispure = all([c == combs[0] for c in combs])
             if not ispure:
@@ -1943,7 +1943,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 3, max_tree_size:int = 30, max_samples:int = 500, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 3, max_tree_size:int = 30, max_samples:int = 200, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
@@ -1957,7 +1957,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         max_tree_size = self.max_tree_size
-        fit_thresh = 0.99999
+        fit_thresh = 0.99999 # we consider everything above this as 'recovered'
 
         if self.random_state is not None:
             np.random.seed(self.random_state)
@@ -2127,8 +2127,15 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
                 
 
-                
-                if np.any(sizes < max_tree_size):
+                if np.any(scores > 0.99):
+                    # select smallest of the best models
+                    idxs = np.where(scores < 0.99)[0]
+                    exprs = [exprs[i] for i in idxs]
+                    sizes = sizes[idxs]
+                    self.expr = exprs[np.argmin(sizes)]
+                    
+                elif np.any(sizes < max_tree_size):
+                    # select best model
                     idxs = np.where(sizes < max_tree_size)[0]
                     exprs = [exprs[i] for i in idxs]
                     scores = scores[idxs]
