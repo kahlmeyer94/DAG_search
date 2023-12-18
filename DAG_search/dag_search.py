@@ -1795,6 +1795,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 ########################
 # New: Polynomial Feature Regressor
 # ########################
+    
 class BaseReg():
     '''
     Regressor based on Linear combination of polynomials and trigonometric functions
