@@ -1646,7 +1646,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(2e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 6, max_orders:int = int(1e5), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = R2_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1797,9 +1797,9 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 # ########################
 class BaseReg():
     '''
-    Regressor based on Linear combination of polynomials and trgonometric functions
+    Regressor based on Linear combination of polynomials and trigonometric functions
     '''
-    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, alpha:float = 0.0, max_terms:int = -1, interactions = 2, **params):
+    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, alpha:float = 0.0, max_terms:int = -1, interactions:int = 2, normalize:bool = False, **params):
         self.degree = degree
         #self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
         if alpha <= 0.0:
@@ -1808,18 +1808,23 @@ class BaseReg():
             self.regr = Lasso(alpha = alpha, max_iter = 10000)
         self.X = None
         self.y = None
+        self.x_mean = None
+        self.x_std = None
+        self.normalize = normalize
         self.max_terms = max_terms
         self.interactions = interactions
         
     def transform2poly(self, X):
         # polynomials up to degree
         # interactions up to interactions
-        X_poly = np.column_stack([X**(i+1) for i in range(self.degree)])
+        X_poly = np.column_stack([X**(i) for i in range(1, self.degree + 1)])
         X_interact = []
         idxs = np.arange(0, X.shape[1], 1)
-        for combs in itertools.combinations(idxs, self.interactions):
-            x_inter = np.prod(X[:, combs], axis=1)
-            X_interact.append(x_inter)
+        for combs in itertools.combinations_with_replacement(idxs, self.interactions):
+            ispure = all([c == combs[0] for c in combs])
+            if not ispure:
+                x_inter = np.prod(X_poly[:, combs], axis=1)
+                X_interact.append(x_inter)
         if len(X_interact) > 0:
             X_interact = np.column_stack(X_interact)
             return np.column_stack([X_poly, X_interact])
@@ -1851,8 +1856,13 @@ class BaseReg():
         else:
             self.X = X.copy()
         
+        if self.normalize:
+            self.x_mean = np.mean(X, axis=0)
+            self.x_std = np.std(self.X, axis=0)
+            self.X = (self.X-self.x_mean)/self.x_std
+
         X_trig = np.column_stack([np.sin(self.X), np.cos(self.X)])
-        X_poly = self.transform2poly(X)
+        X_poly = self.transform2poly(self.X)
         X_all = np.column_stack([X_poly, X_trig])
 
         self.regr.fit(X_all, self.y)
@@ -1871,16 +1881,33 @@ class BaseReg():
 
     def predict(self, X):
         assert self.X is not None
-        X_trig = np.column_stack([np.sin(X), np.cos(X)])
-        X_poly = self.transform2poly(X)
+        
+        if self.normalize:
+            assert self.x_std is not None and self.x_mean is not None
+            X_tmp = (X - self.x_mean)/self.x_std
+        else:
+            X_tmp = X
+
+        X_trig = np.column_stack([np.sin(X_tmp), np.cos(X_tmp)])
+        X_poly = self.transform2poly(X_tmp)
         
         X_all = np.column_stack([X_poly, X_trig])
+        
         pred = self.regr.predict(X_all)
+
+
         return pred
 
     def model(self):
         assert self.X is not None
+
         names = [sympy.symbols(f'x_{i}', real = True) for i in range(self.X.shape[1])]
+        
+        if self.normalize:
+            assert self.x_std is not None and self.x_mean is not None
+            for i in range(len(names)):
+                names[i] = (names[i] - self.x_mean[i])/self.x_std[i]
+
 
         X_idxs = np.arange(self.X.shape[1])
         X_poly = []
@@ -1888,25 +1915,25 @@ class BaseReg():
             for name in names: 
                 X_poly.append(name**degree)
         X_interact = []
-        idxs = np.arange(0, self.X.shape[1], 1)
-        for combs in itertools.combinations(idxs, self.interactions):
+
+        for combs in itertools.combinations(X_idxs, self.interactions):
             x_inter = 1.0
-            for i in combs:
-                x_inter = x_inter * names[i]
-            X_interact.append(x_inter)
+            ispure = all([c == combs[0] for c in combs])
+            if not ispure:
+                for i in combs:
+                    x_inter = x_inter * names[i]
+                X_interact.append(x_inter)
 
         X_trig = []
         for i in range(self.X.shape[1]):
             X_trig.append(sympy.sin(names[i]))
         for i in range(self.X.shape[1]):
             X_trig.append(sympy.cos(names[i]))
-
         expr = sympy.sympify(self.regr.intercept_)
         for x_name, alpha in zip(X_poly + X_interact + X_trig, self.regr.coef_):
-            if abs(alpha) > 0.0:
+            if abs(alpha) > 1e-10:
                 expr += alpha*x_name
         return expr
-
 
 class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
@@ -1915,7 +1942,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 5, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 3, max_tree_size:int = 30, max_samples:int = 200, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 3, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 3, max_tree_size:int = 30, max_samples:int = 500, processes:int = 1, **kwargs):
         self.random_state = random_state
         self.processes = processes
         self.regr_search = self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
