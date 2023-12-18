@@ -2056,8 +2056,9 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                             score = r2_score(y, pred)
                             scores.append(score)
 
+                            expr = self.regr_poly.model()
                             expr = self._translate(X, expr, repl_expr)
-                            expr = utils.round_floats(self.regr_poly.model(), round_digits = 3)
+                            expr = utils.round_floats(expr, round_digits = 3)
                             expr = utils.simplify(expr)
                             exprs.append(expr)
                             ts = utils.tree_size(expr)
@@ -2077,8 +2078,9 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                             score = r2_score(y, pred)
                             scores.append(score)
 
+                            expr = self.regr_search.model()
                             expr = self._translate(X, expr, repl_expr)
-                            expr = utils.round_floats(self.regr_search.model(), round_digits = 3)
+                            expr = utils.round_floats(expr, round_digits = 3)
                             expr = utils.simplify(expr)
                             exprs.append(expr)
                             ts = utils.tree_size(expr)
