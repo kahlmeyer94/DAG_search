@@ -2131,7 +2131,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
                 if np.any(scores > 0.99):
                     # select smallest of the best models
-                    idxs = np.where(scores < 0.99)[0]
+                    idxs = np.where(scores > 0.99)[0]
                     exprs = [exprs[i] for i in idxs]
                     sizes = sizes[idxs]
                     self.expr = exprs[np.argmin(sizes)]
