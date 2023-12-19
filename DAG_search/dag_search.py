@@ -2129,15 +2129,15 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
                 
 
-                if np.any(scores > 0.99):
-                    # select smallest of the best models
+                if False and np.any(scores > 0.99):
+                    # select smallest of the best models [not used]
                     idxs = np.where(scores > 0.99)[0]
                     exprs = [exprs[i] for i in idxs]
                     sizes = sizes[idxs]
                     self.expr = exprs[np.argmin(sizes)]
                     
-                elif np.any(sizes < max_tree_size):
-                    # select best model
+                if np.any(sizes < max_tree_size):
+                    # select best model of the smallest models
                     idxs = np.where(sizes < max_tree_size)[0]
                     exprs = [exprs[i] for i in idxs]
                     scores = scores[idxs]
