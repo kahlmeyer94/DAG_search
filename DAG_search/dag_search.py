@@ -1013,7 +1013,7 @@ def is_pickleable(x:object) -> bool:
     except (pickle.PicklingError, AttributeError):
         return False
 
-def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 900.0, stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
+def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 1800.0, stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
     '''
     Exhaustive search for a DAG.
 
@@ -1401,7 +1401,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 
     return ret
 
-def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 3600.0, stop_thresh:float = -1.0, hierarchy_stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
+def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 1800.0, stop_thresh:float = -1.0, hierarchy_stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
     '''
     Exhaustive search for a DAG but hierarchical.
 
@@ -1821,11 +1821,9 @@ class BaseReg():
         X_poly = np.column_stack([X**(i) for i in range(1, self.degree + 1)])
         X_interact = []
         idxs = np.arange(0, X.shape[1], 1)
-        for combs in itertools.combinations_with_replacement(idxs, self.interactions):
-            ispure = all([c == combs[0] for c in combs])
-            if not ispure:
-                x_inter = np.prod(X_poly[:, combs], axis=1)
-                X_interact.append(x_inter)
+        for combs in itertools.combinations(idxs, self.interactions):
+            x_inter = np.prod(X_poly[:, combs], axis=1)
+            X_interact.append(x_inter)
         if len(X_interact) > 0:
             X_interact = np.column_stack(X_interact)
             return np.column_stack([X_poly, X_interact])
@@ -1917,13 +1915,11 @@ class BaseReg():
                 X_poly.append(name**degree)
         X_interact = []
 
-        for combs in itertools.combinations_with_replacement(X_idxs, self.interactions):
+        for combs in itertools.combinations(X_idxs, self.interactions):
             x_inter = 1.0
-            ispure = all([c == combs[0] for c in combs])
-            if not ispure:
-                for i in combs:
-                    x_inter = x_inter * names[i]
-                X_interact.append(x_inter)
+            for i in combs:
+                x_inter = x_inter * names[i]
+            X_interact.append(x_inter)
 
         X_trig = []
         for i in range(self.X.shape[1]):
@@ -1992,7 +1988,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             self.pareto_front = [self.expr]
         else:
             # Search for substitutions that simplify the problem
-            polydegrees = np.arange(1, self.max_degree, 1)
+            polydegrees = np.arange(1, self.max_degree + 1, 1)
 
             for degree, score in zip(polydegrees, test_scores[:len(polydegrees)]):
                 if score > 0.999:
