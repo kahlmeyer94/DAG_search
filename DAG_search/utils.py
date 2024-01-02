@@ -350,6 +350,13 @@ def round_floats(ex1, round_digits:int = 3, max_v:int = np.inf):
         ex1 = ex2
     return ex1
 
+def jaccard_idx(expr1, expr2):
+    tmp_expr1 = simplify(round_floats(expr1.evalf()))
+    tmp_expr2 = simplify(round_floats(expr2.evalf()))
+    S0 = set([str(subexpr) for subexpr in get_subexprs_sympy(tmp_expr1)])
+    S1 = set([str(subexpr) for subexpr in get_subexprs_sympy(tmp_expr2)])
+    return len(S0&S1)/len(S0|S1)
+
 
 #####################################
 # Symbolic Distance Measures
