@@ -243,6 +243,66 @@ def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], over
                 with open(save_path, 'wb') as handle:
                     pickle.dump(res_dict, handle) 
 
+def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_calc_nodes : int = 4, orders :list = [100000, 200000, 400000, 800000, 1600000, 3200000]):
+    '''
+    Experiment to show that more compute = more recovery.
+    The #DAG frames are varied for a given problem instance.
+
+    @Params:
+        ds_name... Name of dataset
+        problem_name... Name of problem in Dataset
+        n_tries... number of tries (different random states)
+        n_calc_nodes... number of internal nodes
+        orders... list of number of maximum DAG-frames to try
+
+    @Returns:
+        saves dictionary:
+            [max_orders] = list of recoveries
+    '''
+    load_path = f'datasets/{ds_name}/tasks.p'
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    save_path = f'results/{ds_name}/{problem_name}_dagframes.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    if not os.path.exists(f'results/{ds_name}'):
+        os.mkdir(f'results/{ds_name}')
+    
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as handle:
+            res_dict = pickle.load(handle)
+    else:
+        res_dict = {}
+
+    X, y, exprs_true = task_dict[problem_name]['X'], task_dict[problem_name]['y'], task_dict[problem_name]['expr']
+    for max_orders in orders:
+        recoveries = []
+        if max_orders in res_dict:
+            recoveries = res_dict[max_orders]
+        
+        for rand_state in range(len(recoveries), n_tries):
+            regressor = dag_search.DAGRegressor(processes = 32, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
+            print('####################')
+            print(f'# Random State: {rand_state}, Nodes: {n_calc_nodes}, Orders: {max_orders}, Problem: {problem_name}')
+            print('####################')
+
+            all_rec = []
+
+            for idx in range(y.shape[1]):
+                expr_true = exprs_true[idx]
+                y_part = y[:, idx]
+                regressor.fit(X, y_part)
+                expr_est = regressor.model()
+                rec = utils.symb_eq(expr_est, expr_true) 
+                all_rec.append(rec)
+            recoveries.append(np.mean(all_rec))
+            res_dict[max_orders] = recoveries
+
+            with open(save_path, 'wb') as handle:
+                pickle.dump(res_dict, handle) 
+
+
+
 ###############################
 # OLD - not used in the paper
 ###############################
@@ -716,8 +776,11 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 
 if __name__ == '__main__':
 
+    # Nguyen 6 Experiment [todo]
+    if False:
+        pass
     
-    # Scaling experiment [todo]
+    # Scaling experiment [done]
     if False:
         scaling_experiment('Strogatz')
         scaling_experiment('Nguyen')
