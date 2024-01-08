@@ -281,7 +281,7 @@ def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 10, 
             recoveries = res_dict[max_orders]
         
         for rand_state in range(len(recoveries), n_tries):
-            regressor = dag_search.DAGRegressor(processes = 32, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
+            regressor = dag_search.DAGRegressor(processes = 16, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
             print('####################')
             print(f'# Random State: {rand_state}, Nodes: {n_calc_nodes}, Orders: {max_orders}, Problem: {problem_name}')
             print('####################')
@@ -291,7 +291,7 @@ def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 10, 
             for idx in range(y.shape[1]):
                 expr_true = exprs_true[idx]
                 y_part = y[:, idx]
-                regressor.fit(X, y_part)
+                regressor.fit(X, y_part, verbose = 2)
                 expr_est = regressor.model()
                 rec = utils.symb_eq(expr_est, expr_true) 
                 all_rec.append(rec)
