@@ -776,8 +776,8 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 
 if __name__ == '__main__':
 
-    # Nguyen 6 Experiment [todo]
-    if True:
+    # Nguyen 6 Experiment [done]
+    if False:
         dagframes_experiment(ds_name = 'Nguyen', problem_name = 'Nguyen-6')
     
     # Scaling experiment [done]
