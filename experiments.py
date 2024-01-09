@@ -243,7 +243,7 @@ def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], over
                 with open(save_path, 'wb') as handle:
                     pickle.dump(res_dict, handle) 
 
-def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_calc_nodes : int = 4, orders :list = [100000, 200000, 400000, 800000, 1600000, 3200000]):
+def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 30, n_calc_nodes : int = 4, orders :list = [50000, 100000, 200000, 400000, 800000, 1600000]):
     '''
     Experiment to show that more compute = more recovery.
     The #DAG frames are varied for a given problem instance.
