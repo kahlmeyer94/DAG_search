@@ -319,6 +319,83 @@ def single_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_c
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle) 
 
+def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_inter_nodes : list = [3, 4, 5, 6], n_frames : list = [50000, 100000, 200000, 400000], n_cores : list = [4, 8, 16, 32], overwrite:bool = False):
+    '''
+    Simple Experiment to investigate runtime of DAGSearch.
+
+    @Params:
+        ds_name... Name of dataset
+        n_cores... number of cores to use
+    
+    @Returns:
+        saves dictionary:
+            [setting] = list of times
+    '''
+
+    # random regression problem
+    np.random.seed(0)
+    X = np.random.rand(100, 1)
+    y = np.random.rand(100)
+
+    save_path = f'results/runtime.p'
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as handle:
+            res_dict = pickle.load(handle)
+    else:
+        res_dict = {}
+
+    # creating all settings
+    default_setting = (200000, 5, 16, 1) # frames, intermediary, cores, params
+    all_settings = [default_setting]
+    for x in n_frames:
+        tmp = list(default_setting)
+        tmp[0] = x
+        tmp = tuple(tmp)
+        all_settings.append(tmp)
+
+    for x in n_inter_nodes:
+        tmp = list(default_setting)
+        tmp[1] = x
+        tmp = tuple(tmp)
+        all_settings.append(tmp)
+
+    for x in n_cores:
+        tmp = list(default_setting)
+        tmp[2] = x
+        tmp = tuple(tmp)
+        all_settings.append(tmp)
+    
+    for x in n_params:
+        tmp = list(default_setting)
+        tmp[3] = x
+        tmp = tuple(tmp)
+        all_settings.append(tmp)
+    all_settings = set(all_settings)
+    print(f'Evaluating {len(all_settings)} settings')
+    
+    for setting in all_settings:
+        print(f'Testing Setting {setting}')
+        max_orders, n_calc_nodes, p, k = setting
+
+        if setting not in res_dict:
+            res_dict[setting] = []
+        times = res_dict[setting]
+        for rand_state in range(len(times), n_tries):
+            regressor = dag_search.DAGRegressor(processes = p, k = k, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
+
+            s_time = timer()
+            regressor.fit(X, y)
+            e_time = timer()
+
+            times.append(e_time - s_time)
+
+            res_dict[setting] = times
+
+            with open(save_path, 'wb') as handle:
+                pickle.dump(res_dict, handle) 
 
 
 ###############################
