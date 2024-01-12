@@ -319,7 +319,7 @@ def single_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_c
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle) 
 
-def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_inter_nodes : list = [3, 4, 5, 6], n_frames : list = [50000, 100000, 200000, 400000], n_cores : list = [4, 8, 16, 32], overwrite:bool = False):
+def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_inter_nodes : list = [0, 1, 2, 3], n_frames : list = [25000, 50000, 100000, 200000], n_cores : list = [1, 2, 4, 8], overwrite:bool = False):
     '''
     Simple Experiment to investigate runtime of DAGSearch.
 
@@ -348,7 +348,7 @@ def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_int
         res_dict = {}
 
     # creating all settings
-    default_setting = (200000, 5, 16, 1) # frames, intermediary, cores, params
+    default_setting = (50000, 1, 4, 1) # frames, intermediary, cores, params
     all_settings = [default_setting]
     for x in n_frames:
         tmp = list(default_setting)
@@ -393,7 +393,6 @@ def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_int
             times.append(e_time - s_time)
 
             res_dict[setting] = times
-
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle) 
 
@@ -871,8 +870,12 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 
 if __name__ == '__main__':
 
-    # Nguyen 6 Experiment [done]
+    # Runtime Experiment [running]
     if True:
+        runtime_experiment()
+
+    # Nguyen 6 Experiment [running]
+    if False:
         single_experiment(ds_name = 'Nguyen', problem_name = 'Nguyen-6')
     
     # Scaling experiment [done]
