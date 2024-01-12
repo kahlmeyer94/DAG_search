@@ -262,7 +262,7 @@ def single_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_c
     load_path = f'datasets/{ds_name}/tasks.p'
     with open(load_path, 'rb') as handle:
         task_dict = pickle.load(handle)
-    save_path = f'results/{ds_name}/{problem_name}_dagframes.p'
+    save_path = f'results/{ds_name}/{problem_name}_single.p'
     if not os.path.exists('results'):
         os.mkdir('results')
     if not os.path.exists(f'results/{ds_name}'):
@@ -279,7 +279,8 @@ def single_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_c
         recoveries = []
         times = []
         if max_orders in res_dict:
-            recoveries = res_dict[max_orders]
+            recoveries = res_dict[max_orders]['recovery']
+            times = res_dict[max_orders]['times']
         
         for rand_state in range(len(recoveries), n_tries):
             regressor = dag_search.DAGRegressor(processes = 16, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
