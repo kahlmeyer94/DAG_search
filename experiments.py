@@ -243,7 +243,7 @@ def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], over
                 with open(save_path, 'wb') as handle:
                     pickle.dump(res_dict, handle) 
 
-def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 30, n_calc_nodes : int = 4, orders :list = [50000, 100000, 200000, 400000, 800000, 1600000]):
+def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_calc_nodes : int = 4, orders :list = [50000, 100000, 200000, 400000, 800000, 1600000]):
     '''
     Experiment to show that more compute = more recovery.
     The #DAG frames are varied for a given problem instance.
@@ -257,7 +257,7 @@ def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 30, 
 
     @Returns:
         saves dictionary:
-            [max_orders] = list of recoveries
+            [max_orders][criterium] = list of criterium
     '''
     load_path = f'datasets/{ds_name}/tasks.p'
     with open(load_path, 'rb') as handle:
@@ -277,6 +277,7 @@ def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 30, 
     X, y, exprs_true = task_dict[problem_name]['X'], task_dict[problem_name]['y'], task_dict[problem_name]['expr']
     for max_orders in orders:
         recoveries = []
+        times = []
         if max_orders in res_dict:
             recoveries = res_dict[max_orders]
         
@@ -287,16 +288,32 @@ def dagframes_experiment(ds_name : str, problem_name : str, n_tries : int = 30, 
             print('####################')
 
             all_rec = []
+            all_times = []
 
             for idx in range(y.shape[1]):
                 expr_true = exprs_true[idx]
                 y_part = y[:, idx]
-                regressor.fit(X, y_part, verbose = 2)
+
+                s_time = timer()
+                regressor.fit(X, y_part)
+                e_time = timer()
+
+                # recovery
                 expr_est = regressor.model()
                 rec = utils.symb_eq(expr_est, expr_true) 
                 all_rec.append(rec)
+
+                # times 
+                r_time = e_time - s_time
+                all_times.append(r_time)
+
             recoveries.append(np.mean(all_rec))
-            res_dict[max_orders] = recoveries
+            times.append(np.mean(all_times))
+
+            res_dict[max_orders] = {
+                'recovery' : recoveries,
+                'times' : times
+            }
 
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle) 
@@ -777,7 +794,7 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 if __name__ == '__main__':
 
     # Nguyen 6 Experiment [done]
-    if False:
+    if True:
         dagframes_experiment(ds_name = 'Nguyen', problem_name = 'Nguyen-6')
     
     # Scaling experiment [done]
