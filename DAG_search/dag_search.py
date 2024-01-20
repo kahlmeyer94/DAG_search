@@ -895,7 +895,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                 pass
     return ret_consts, ret_losses, ret_ops
 
-def sample_graph(m:int, n:int, k:int, n_calc_nodes:int) -> comp_graph.CompGraph:
+def sample_graph(m:int, n:int, k:int, n_calc_nodes:int, only_order:bool = False) -> comp_graph.CompGraph:
     '''
     Samples a computational DAG.
 
@@ -977,6 +977,9 @@ def sample_graph(m:int, n:int, k:int, n_calc_nodes:int) -> comp_graph.CompGraph:
         new_order_ID.append((ren_dict[i], tuple(new_preds)))
     order = tuple(new_order_ID)
         
+    if only_order:
+        return order
+    
     # 2. sample operations on build order
     node_ops = []
     for _, parents in order:

@@ -17,6 +17,206 @@ from DAG_search import utils
 
 
 ####################
+# AI Feynman Symmetries
+####################
+
+# adapted straight from here: https://github.com/SJ001/AI-Feynman/blob/master/aifeynman/S_symmetry.py
+def check_translational_symmetry_multiply(X, y, f_appr):
+    # f(x, y) = f(x*y)?
+    
+    try:
+        # make the shift x->x+a for 2 variables at a time (different variables)
+        product = y.copy()
+        n_variables = X.shape[1]
+        a = 1.2
+        min_error = 1000
+        best_i = -1
+        best_j = -1
+        best_mu = 0
+        best_sigma = 0
+        for i in range(0, n_variables, 1):
+            for j in range(0, n_variables, 1):
+                if i<j:
+                    fact_translate = X.copy()
+                    fact_translate[:,i] = fact_translate[:,i] * a
+                    fact_translate[:,j] = fact_translate[:,j] / a
+                    list_errs = abs(product - f_appr.predict(fact_translate))
+                    error = np.median(list_errs)
+                    mu = np.mean(np.log2(1+list_errs*2**30))
+                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    if error<min_error:
+                        min_error = error
+                        best_i = i
+                        best_j = j
+                        best_mu = mu
+                        best_sigma = sigma
+        return {
+            'error' : min_error,
+            'i' : best_i,
+            'j' : best_j,
+            'mu' : best_mu,
+            'sigma' : best_sigma
+        }
+    except Exception as e:
+        print(e)
+        return None
+
+def check_translational_symmetry_divide(X, y, f_appr):
+    # f(x, y) = f(x/y)?
+    
+    try:
+        # make the shift x->x+a for 2 variables at a time (different variables)
+        product = y.copy()
+        n_variables = X.shape[1]
+        a = 1.2
+        min_error = 1000
+        best_i = -1
+        best_j = -1
+        best_mu = 0
+        best_sigma = 0
+        for i in range(0, n_variables, 1):
+            for j in range(0, n_variables, 1):
+                if i<j:
+                    fact_translate = X.copy()
+                    fact_translate[:,i] = fact_translate[:,i] * a
+                    fact_translate[:,j] = fact_translate[:,j] * a
+                    list_errs = abs(product - f_appr.predict(fact_translate))
+                    error = np.median(list_errs)
+                    mu = np.mean(np.log2(1+list_errs*2**30))
+                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    if error<min_error:
+                        min_error = error
+                        best_i = i
+                        best_j = j
+                        best_mu = mu
+                        best_sigma = sigma
+        return {
+            'error' : min_error,
+            'i' : best_i,
+            'j' : best_j,
+            'mu' : best_mu,
+            'sigma' : best_sigma
+        }
+    except Exception as e:
+        print(e)
+        return None
+
+def check_translational_symmetry_plus(X, y, f_appr):
+    # f(x, y) = f(x+y)?
+    
+    try:
+        # make the shift x->x+a for 2 variables at a time (different variables)
+        product = y.copy()
+        n_variables = X.shape[1]
+        min_error = 1000
+        best_i = -1
+        best_j = -1
+        best_mu = 0
+        best_sigma = 0
+        for i in range(0, n_variables, 1):
+            for j in range(0, n_variables, 1):
+                if i<j:
+                    fact_translate = X.copy()
+                    a = 0.5*min(np.std(fact_translate[:,i]), np.std(fact_translate[:,j]))
+                    fact_translate[:,i] = fact_translate[:,i] + a
+                    fact_translate[:,j] = fact_translate[:,j] - a
+                    list_errs = abs(product - f_appr.predict(fact_translate))
+                    error = np.median(list_errs)
+                    mu = np.mean(np.log2(1+list_errs*2**30))
+                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    if error<min_error:
+                        min_error = error
+                        best_i = i
+                        best_j = j
+                        best_mu = mu
+                        best_sigma = sigma
+        return {
+            'error' : min_error,
+            'i' : best_i,
+            'j' : best_j,
+            'mu' : best_mu,
+            'sigma' : best_sigma
+        }
+    except Exception as e:
+        print(e)
+        return None
+
+def check_translational_symmetry_minus(X, y, f_appr):
+    # f(x, y) = f(x-y)?
+    
+    try:
+        # make the shift x->x+a for 2 variables at a time (different variables)
+        product = y.copy()
+        n_variables = X.shape[1]
+        min_error = 1000
+        best_i = -1
+        best_j = -1
+        best_mu = 0
+        best_sigma = 0
+        for i in range(0, n_variables, 1):
+            for j in range(0, n_variables, 1):
+                if i<j:
+                    fact_translate = X.copy()
+                    a = 0.5*min(np.std(fact_translate[:,i]), np.std(fact_translate[:,j]))
+                    fact_translate[:,i] = fact_translate[:,i] + a
+                    fact_translate[:,j] = fact_translate[:,j] + a
+                    list_errs = abs(product - f_appr.predict(fact_translate))
+                    error = np.median(list_errs)
+                    mu = np.mean(np.log2(1+list_errs*2**30))
+                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    if error<min_error:
+                        min_error = error
+                        best_i = i
+                        best_j = j
+                        best_mu = mu
+                        best_sigma = sigma
+        return {
+            'error' : min_error,
+            'i' : best_i,
+            'j' : best_j,
+            'mu' : best_mu,
+            'sigma' : best_sigma
+        }
+    except Exception as e:
+        print(e)
+        return None
+
+####################
+# Function Approximation
+####################
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+
+class PolyReg():
+    '''
+    Regressor based on Polynomial Regression
+    '''
+    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
+        self.degree = degree
+        self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
+        self.regr = LinearRegression()
+        self.X = None
+        self.y = None
+        
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        X_poly = self.poly.fit_transform(self.X)
+        self.regr.fit(X_poly, self.y)
+
+    def predict(self, X):
+        assert self.X is not None
+        X_poly = self.poly.fit_transform(X)
+        pred = self.regr.predict(X_poly)
+        return pred
+
+
+####################
 # Simplifications
 ####################
 
@@ -33,6 +233,8 @@ class Simplification():
 
     def solve(self, exprs):
         pass
+
+
 
 class MultSep(Simplification):
     '''
@@ -258,14 +460,14 @@ class SymSep(Simplification):
 # Simplification - Tree
 ########################
 
-def get_simpl(X, y):
+def get_simpl(X, y, min_error = 1e-3):
     if X.shape[1] > 1:
         # 1. use Polynomial to fit
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         polydegrees = np.arange(1, 10, 1)
         rmses = []
         for degree in polydegrees:
-            f_appr = dag_search.BaseReg(degree = degree)
+            f_appr = PolyReg(degree = degree)
             f_appr.fit(X_train, y_train)
             pred = f_appr.predict(X_test)
             rmse = np.sqrt(np.mean((y_test - pred)**2))
@@ -277,12 +479,8 @@ def get_simpl(X, y):
         f_appr.fit(X, y)
         f_rmse = rmses[min_idx]
 
-        # 1. Symmetry
-        sym_sep = SymSep(f_appr)
-        sym_sep.find(X, y)
-        error = sym_sep.error        
-        print(f'Sym: {error}, {sym_sep.transl_dict["x_0"]}')
-        return sym_sep
+        # 1. Minus Symmetry
+
             
     return None
 
