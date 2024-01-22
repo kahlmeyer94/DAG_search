@@ -12,6 +12,7 @@ from timeit import default_timer as timer
 
 from DAG_search import utils
 from DAG_search import dag_search
+from DAG_search import simplifications
 from regressors import regressors as sregs
 
 
@@ -926,6 +927,9 @@ def niklas_experiment():
 
 if __name__ == '__main__':
     
+
+
+
     # Runtime Experiment [done]
     if False:
         runtime_experiment()
@@ -949,23 +953,30 @@ if __name__ == '__main__':
         timing_experiment('Feynman')
 
     # Recovery experiment [done]
-    if False:
-        overwrite = True
+    if True:
+        overwrite = False
         rand_state = 0
         problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        problems = ['Nguyen', 'Strogatz', 'Feynman', 'Univ']
+        problems = ['Nguyen', 'Strogatz', 'Feynman', 'Univ', 'Feynman', 'Feynman_bonus']
 
         regs = {
-            #'linreg' : (regressors.LinReg(), True),
-            #'polyreg2' : (regressors.PolyReg(degree= 2), True),
-            #'polyreg3' : (regressors.PolyReg(degree= 3), True),
-            #'MLP' : (regressors.MLP(random_state = rand_state), False),
-            #'operon' : (regressors.Operon(random_state = rand_state), True),
-            #'gplearn' : (regressors.GPlearn(random_state = rand_state), True),
-            #'dsr' : (regressors.DSR(), True),
+            'linreg' : (sregs.LinReg(), True),
+            'polyreg2' : (sregs.PolyReg(degree= 2), True),
+            'polyreg3' : (sregs.PolyReg(degree= 3), True),
+            'MLP' : (sregs.MLP(random_state = rand_state), False),
+            'operon' : (sregs.Operon(random_state = rand_state), True),
+            'gplearn' : (sregs.GPlearn(random_state = rand_state), True),
+            'dsr' : (sregs.DSR(), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 16, random_state = rand_state), True), 
-            'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 16, random_state = rand_state), True), 
+            'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 16, random_state = rand_state), True),
+            
         }
+        # Elimination
+        symb_regr = regs['DAGSearch']
+        regs['ElimDAGSearch'] = (simplifications.EliminationRegressor(symb_regr), True)
+        symb_regr = regs['DAGSearchPoly']
+        regs['ElimDAGSearchPoly'] = (simplifications.EliminationRegressor(symb_regr), True)
+        
         for ds_name in problems:
             for regressor_name in regs:
                 if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):

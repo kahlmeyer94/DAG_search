@@ -17,10 +17,62 @@ from DAG_search import utils
 
 
 ####################
+# Function Approximation
+####################
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+
+class PolyReg():
+    '''
+    Regressor based on Polynomial Regression
+    '''
+    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
+        self.degree = degree
+        self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
+        self.regr = LinearRegression()
+        self.X = None
+        self.y = None
+        
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        X_poly = self.poly.fit_transform(self.X)
+        self.regr.fit(X_poly, self.y)
+
+    def predict(self, X):
+        assert self.X is not None
+        X_poly = self.poly.fit_transform(X)
+        pred = self.regr.predict(X_poly)
+        return pred
+
+def approximate_poly(X, y):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    polydegrees = np.arange(1, 10, 1)
+    rmses = []
+    for degree in polydegrees:
+        f_appr = PolyReg(degree = degree)
+        f_appr.fit(X_train, y_train)
+        pred = f_appr.predict(X_test)
+        rmse = np.sqrt(np.mean((y_test - pred)**2))
+        rmses.append(rmse)
+        if rmse < 1e-5:
+            break
+    min_idx = np.argmin(rmses)
+    f_appr = PolyReg(degree = polydegrees[min_idx])
+    f_appr.fit(X, y)
+    return f_appr
+
+####################
 # AI Feynman Symmetries
+# symmetry checks adapted straight from here: 
+# https://github.com/SJ001/AI-Feynman/blob/master/aifeynman/S_symmetry.py
 ####################
 
-# adapted straight from here: https://github.com/SJ001/AI-Feynman/blob/master/aifeynman/S_symmetry.py
 def check_translational_symmetry_multiply(X, y, f_appr):
     # f(x, y) = f(x*y)?
     
@@ -181,43 +233,217 @@ def check_translational_symmetry_minus(X, y, f_appr):
         print(e)
         return None
 
-####################
-# Function Approximation
-####################
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
+def check_dummy_variable(X, y, f_appr):
+    # f(x, y) = f(x)?
+    
+    try:
+        product = y.copy()
+        n_variables = X.shape[1]
+        min_error = 1000
+        best_i = -1
+        best_j = -1
+        best_mu = 0
+        best_sigma = 0
+        for i in range(0, n_variables, 1):
+            fact_translate = X.copy()
+            permute_idxs = np.arange(len(X))
+            np.random.shuffle(permute_idxs)
+            fact_translate[:,i] = fact_translate[:,i][permute_idxs]
+            list_errs = abs(product - f_appr.predict(fact_translate))
+            error = np.median(list_errs)
+            mu = np.mean(np.log2(1+list_errs*2**30))
+            sigma = np.std(np.log2(1+list_errs*2**30))
+            if error<min_error:
+                min_error = error
+                best_i = i
+                best_mu = mu
+                best_sigma = sigma
+        return {
+            'error' : min_error,
+            'i' : best_i,
+            'mu' : best_mu,
+            'sigma' : best_sigma
+        }
+    except Exception as e:
+        print(e)
+        return None
+    
+def find_best_elimination(X, y, f_appr, transl_dict):
 
-class PolyReg():
-    '''
-    Regressor based on Polynomial Regression
-    '''
-    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
-        self.degree = degree
-        self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
-        self.regr = LinearRegression()
-        self.X = None
-        self.y = None
+    # Find best eliminations
+    best_error = np.inf
+    best_X = X.copy()
+    best_transl = transl_dict
+
+    # x-y
+    res = check_translational_symmetry_minus(X, y, f_appr)
+    if 'error' in res and res['error'] < best_error:
+        best_error = res['error']
+        i, j = res['i'], res['j']
+        best_X = np.column_stack([X[:, i] - X[:, j]] + [X[:, k] for k in range(X.shape[1]) if k not in [i, j]])
+        best_transl = {0 : f'({transl_dict[i]}) - ({transl_dict[j]})'}
+        for k in range(X.shape[1]):
+            if k not in [i, j]:
+                best_transl[len(best_transl)] = transl_dict[k]
+    # x+y
+    res = check_translational_symmetry_plus(X, y, f_appr)
+    if 'error' in res and res['error'] < best_error:
+        best_error = res['error']
+
+        i, j = res['i'], res['j']
+        best_X = np.column_stack([X[:, i] + X[:, j]] + [X[:, k] for k in range(X.shape[1]) if k not in [i, j]])
+        best_transl = {0 : f'({transl_dict[i]}) + ({transl_dict[j]})'}
+        for k in range(X.shape[1]):
+            if k not in [i, j]:
+                best_transl[len(best_transl)] = transl_dict[k]
+
+    # x*y
+    res = check_translational_symmetry_multiply(X, y, f_appr)
+    if 'error' in res and res['error'] < best_error:
+        best_error = res['error']
+
+        i, j = res['i'], res['j']
+        best_X = np.column_stack([X[:, i] * X[:, j]] + [X[:, k] for k in range(X.shape[1]) if k not in [i, j]])
+        best_transl = {0 : f'({transl_dict[i]}) * ({transl_dict[j]})'}
+        for k in range(X.shape[1]):
+            if k not in [i, j]:
+                best_transl[len(best_transl)] = transl_dict[k]
+
+    # x/y
+    res = check_translational_symmetry_divide(X, y, f_appr)
+    if 'error' in res and res['error'] < best_error:    
+        best_error = res['error']
+
+        i, j = res['i'], res['j']
+        best_X = np.column_stack([X[:, i] / X[:, j]] + [X[:, k] for k in range(X.shape[1]) if k not in [i, j]])
+        best_transl = {0 : f'({transl_dict[i]}) / ({transl_dict[j]})'}
+        for k in range(X.shape[1]):
+            if k not in [i, j]:
+                best_transl[len(best_transl)] = transl_dict[k]
+
+    # x dummy
+    res = check_dummy_variable(X, y, f_appr)
+    if 'error' in res and res['error'] < best_error:
+        best_error = res['error']
+
+        i = res['i']
+        best_X = np.column_stack([X[:, k] for k in range(X.shape[1]) if k not in [i]])
+        best_transl = {}
+        for k in range(X.shape[1]):
+            if k not in [i]:
+                best_transl[len(best_transl)] = transl_dict[k]
+    return {'error' : best_error, 'X' : best_X, 'transl' : best_transl}
+
+def eliminate(X, y, fit_func = approximate_poly, rmse_thresh = 1e-3, elim_thresh = 1e-3):
+
+    X_tmp = X.copy()
+    transl_dict = {i : f'z_{i}' for i in range(X.shape[1])}
+    searching = X_tmp.shape[1] > 1
+
+    while searching:
+        f_appr = fit_func(X_tmp, y)
+        pred = f_appr.predict(X_tmp)
+        rmse = np.sqrt(np.mean((y-pred)**2))
         
-    def fit(self, X, y):
-        assert len(y.shape) == 1
-        self.y = y.copy()
+        if rmse < rmse_thresh:
 
-        if len(X.shape) == 1:
-            self.X = X.reshape(-1, 1).copy()
+            elim_res = find_best_elimination(X_tmp, y, f_appr, transl_dict)
+
+            if elim_res['error'] < elim_thresh:
+                X_tmp = elim_res['X']
+                transl_dict = elim_res['transl']
+                searching = X_tmp.shape[1] > 1
+            else:
+                searching = False
         else:
-            self.X = X.copy()
-        X_poly = self.poly.fit_transform(self.X)
-        self.regr.fit(X_poly, self.y)
+            searching = False
+            
+    return X_tmp, transl_dict
+
+####################
+# Regressor
+####################
+
+class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+    '''
+    Symbolic Regression based on Elimination Tests
+
+    Sklearn interface.
+    '''
+
+    def __init__(self, symb_regr, positives:list = None, expr = None, exec_func = None, **kwargs):
+        '''
+        @Params:
+            symb_regr... symbolic regressor (has .fit(X, y), .predict(X), .model() function)
+            positives... marks which X are strictly positive
+        '''
+        self.symb_regr = symb_regr
+        self.positives = positives
+        self.expr = expr
+        self.exec_func = exec_func
+
+    def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
+        '''
+        Fits a model on given regression data.
+        @Params:
+            X... input data (shape n_samples x inp_dim)
+            y... output data (shape n_samples)
+        '''
+        assert len(y.shape) == 1, f'y must be 1-dimensional (current shape: {y.shape})'
+        
+        x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+
+        self.positives = np.all(X > 0, axis = 0)
+
+        if verbose > 0:
+            print('Recursively searching for Eliminations')
+        X_new, transl_dict = eliminate(X, y)
+
+        if verbose > 0:
+            print(f'Size of new problem: {X_new.shape[1]} (old: {X.shape[1]})')
+            print(transl_dict)
+
+        # solving with Symbolic regressor
+        self.symb_regr.fit(X_new, y, verbose = verbose)
+        expr = str(self.symb_regr.model())
+        if verbose > 0:
+            print(expr)
+        for i in transl_dict:
+            expr = expr.replace(f'x_{i}', f'({transl_dict[i]})')
+        expr = expr.replace('z_', 'x_')
+        self.expr = sympy.sympify(expr)
+        self.exec_func = sympy.lambdify(x_symbs, self.expr)
+
+        return self
 
     def predict(self, X):
-        assert self.X is not None
-        X_poly = self.poly.fit_transform(X)
-        pred = self.regr.predict(X_poly)
-        return pred
+        assert hasattr(self, 'expr')
+
+        if not hasattr(self, 'exec_func'):
+            x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+            self.exec_func = sympy.lambdify(x_symbs, self.expr)
+            
+        return self.exec_func(*[X[:, i] for i in range(X.shape[1])])
+
+    def complexity(self):
+        '''
+        Complexity of expression (number of calculations)
+        '''
+        assert hasattr(self, 'expr')
+        return utils.tree_size(self.expr)
+
+    def model(self):
+        '''
+        Evaluates symbolic expression.
+        '''
+        assert hasattr(self, 'expr'), 'No expression found yet. Call .fit first!'
+        return self.expr
+
+
 
 
 ####################
-# Simplifications
+# Simplifications - OLD
 ####################
 
 class Simplification():
