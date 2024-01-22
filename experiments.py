@@ -243,7 +243,7 @@ def timing_experiment(ds_name : str, n_cores : list = [1, 2, 4, 8, 16, 32], over
                 with open(save_path, 'wb') as handle:
                     pickle.dump(res_dict, handle) 
 
-def single_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_calc_nodes : int = 4, orders :list = [50000, 100000, 200000, 400000, 800000, 1600000]):
+def single_experiment(ds_name : str, problem_name : str, n_tries : int = 100, n_calc_nodes : int = 4, orders :list = [50000, 100000, 200000, 400000, 800000, 1600000]):
     '''
     Experiment to show that more compute = more recovery.
     The #DAG frames are varied for a given problem instance.
@@ -319,7 +319,7 @@ def single_experiment(ds_name : str, problem_name : str, n_tries : int = 10, n_c
             with open(save_path, 'wb') as handle:
                 pickle.dump(res_dict, handle) 
 
-def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_inter_nodes : list = [0, 1, 2, 3], n_frames : list = [25000, 50000, 100000, 200000], n_cores : list = [1, 2, 4, 8], overwrite:bool = False):
+def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_inter_nodes : list = [1, 2, 3, 4], n_frames : list = [10000, 30000, 50000, 70000], n_cores : list = [6, 8, 10, 12], overwrite:bool = False):
     '''
     Simple Experiment to investigate runtime of DAGSearch.
 
@@ -348,7 +348,7 @@ def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_int
         res_dict = {}
 
     # creating all settings
-    default_setting = (50000, 1, 4, 1) # frames, intermediary, cores, params
+    default_setting = (50000, 3, 10, 1) # frames, intermediary, cores, params
     all_settings = [default_setting]
     for x in n_frames:
         tmp = list(default_setting)
@@ -373,11 +373,12 @@ def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_int
         tmp[3] = x
         tmp = tuple(tmp)
         all_settings.append(tmp)
-    all_settings = set(all_settings)
+    all_settings = sorted(list(set(all_settings)))
+
     print(f'Evaluating {len(all_settings)} settings')
     
     for setting in all_settings:
-        print(f'Testing Setting {setting}')
+        print(f'Setting {setting}')
         max_orders, n_calc_nodes, p, k = setting
 
         if setting not in res_dict:
@@ -387,7 +388,7 @@ def runtime_experiment(n_tries : int = 10, n_params : list = [0, 1, 2, 3], n_int
             regressor = dag_search.DAGRegressor(processes = p, k = k, random_state = rand_state, n_calc_nodes = n_calc_nodes, max_orders = max_orders)
 
             s_time = timer()
-            regressor.fit(X, y)
+            regressor.fit(X, y, verbose = 0)
             e_time = timer()
 
             times.append(e_time - s_time)
@@ -867,14 +868,69 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
                     pickle.dump(results_dict, handle) 
 
 
+def niklas_experiment():
+    save_path = 'datasets/Tensor/results.p'
+
+    results_dict = {}
+    if False:
+        # X1, y1
+        mode = 'standard'
+        load_path = f'datasets/Tensor/features_mm.npy'
+        X = np.load(load_path)
+        load_path = f'datasets/Tensor/runtimes_mm.npy'
+        y = np.load(load_path)
+
+        results_dict[mode] = {}
+        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 10, max_orders = int(1e7), max_time = 5*3600)
+        est.fit(X, y, verbose = 2)
+        results_dict[mode] = {
+            'expr' : est.model(),
+            'pred' : est.predict(X)
+        }
+        with open(save_path, 'wb') as handle:
+            pickle.dump(results_dict, handle) 
+
+    if False:
+        mode = 'transformed'
+        load_path = f'datasets/Tensor/features_mm_transformed.npy'
+        X = np.load(load_path)
+        load_path = f'datasets/Tensor/runtimes_mm_transformed.npy'
+        y = np.load(load_path)
+
+        results_dict[mode] = {}
+        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 10, max_orders = int(1e7), max_time = 5*3600)
+        est.fit(X, y, verbose = 2)
+        results_dict[mode] = {
+            'expr' : est.model(),
+            'pred' : est.predict(X)
+        }
+        with open(save_path, 'wb') as handle:
+            pickle.dump(results_dict, handle) 
+
+    if True:
+        mode = 'weighted'
+        load_path = f'datasets/Tensor/features_mm_weighted.npy'
+        X = np.load(load_path)
+        load_path = f'datasets/Tensor/runtimes_mm_weighted.npy'
+        y = np.load(load_path)
+
+        results_dict[mode] = {}
+        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 10, max_orders = int(1e7), max_time = 5*3600)
+        est.fit(X, y, verbose = 2)
+        results_dict[mode] = {
+            'expr' : est.model(),
+            'pred' : est.predict(X)
+        }
+        with open(save_path, 'wb') as handle:
+            pickle.dump(results_dict, handle) 
 
 if __name__ == '__main__':
-
-    # Runtime Experiment [running]
-    if True:
+    
+    # Runtime Experiment [done]
+    if False:
         runtime_experiment()
 
-    # Nguyen 6 Experiment [running]
+    # Nguyen 6 Experiment [done]
     if False:
         single_experiment(ds_name = 'Nguyen', problem_name = 'Nguyen-6')
     
@@ -930,6 +986,11 @@ if __name__ == '__main__':
                 recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
 
     # OLD - not used in the paper
+
+    # Niklas Experiment
+    if False:
+        niklas_experiment()
+
 
     # Covariance experiment
     if False:
