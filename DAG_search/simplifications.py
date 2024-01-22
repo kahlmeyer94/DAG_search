@@ -401,13 +401,10 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
 
         if verbose > 0:
             print(f'Size of new problem: {X_new.shape[1]} (old: {X.shape[1]})')
-            print(transl_dict)
 
         # solving with Symbolic regressor
         self.symb_regr.fit(X_new, y, verbose = verbose)
         expr = str(self.symb_regr.model())
-        if verbose > 0:
-            print(expr)
         for i in transl_dict:
             expr = expr.replace(f'x_{i}', f'({transl_dict[i]})')
         expr = expr.replace('z_', 'x_')

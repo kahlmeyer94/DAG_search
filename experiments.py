@@ -972,9 +972,9 @@ if __name__ == '__main__':
             
         }
         # Elimination
-        symb_regr = regs['DAGSearch']
+        symb_regr = regs['DAGSearch'][0]
         regs['ElimDAGSearch'] = (simplifications.EliminationRegressor(symb_regr), True)
-        symb_regr = regs['DAGSearchPoly']
+        symb_regr = regs['DAGSearchPoly'][0]
         regs['ElimDAGSearchPoly'] = (simplifications.EliminationRegressor(symb_regr), True)
         
         for ds_name in problems:
