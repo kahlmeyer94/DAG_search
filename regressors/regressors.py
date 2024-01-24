@@ -57,7 +57,7 @@ class MLP():
         self.X = None
         self.y = None
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
         np.random.seed(self.random_state)
         torch.manual_seed(self.random_state)
@@ -114,7 +114,7 @@ class PolyReg():
         self.X = None
         self.y = None
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
         self.y = y.copy()
 
@@ -160,7 +160,7 @@ class LinReg():
         self.X = None
         self.y = None
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
         self.y = y.copy()
 
@@ -224,7 +224,7 @@ class ESR():
         self.X = None
         self.y = None
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=0):
         import esr.generation.generator as generator # clear
         from esr.fitting.fit_single import single_function # 
         from esr.fitting.likelihood import MSE # 
@@ -394,7 +394,7 @@ class Operon():
         self.X = None
         self.y = None
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
         self.y = y.copy()
 
@@ -451,7 +451,7 @@ class GPlearn():
         self.X = None
         self.y = None
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
         self.y = y.copy()
         if len(X.shape) == 1:
@@ -646,7 +646,7 @@ class DSR():
         self.X = None
         self.y = None
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
         self.y = y.copy()
 
