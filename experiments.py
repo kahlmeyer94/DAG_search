@@ -954,21 +954,22 @@ if __name__ == '__main__':
 
     # Recovery experiment [done]
     if True:
-        overwrite = False
+        overwrite = True
         rand_state = 0
-        problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        problems = ['Nguyen', 'Strogatz', 'Feynman', 'Univ', 'Feynman', 'Feynman_bonus']
+        #problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
+        #problems = ['Nguyen', 'Strogatz', 'Univ', 'Feynman', 'Feynman_bonus']
+        problems = ['Feynman', 'Feynman_bonus']
 
         regs = {
-            'linreg' : (sregs.LinReg(), True),
-            'polyreg2' : (sregs.PolyReg(degree= 2), True),
-            'polyreg3' : (sregs.PolyReg(degree= 3), True),
-            'MLP' : (sregs.MLP(random_state = rand_state), False),
-            'operon' : (sregs.Operon(random_state = rand_state), True),
-            'gplearn' : (sregs.GPlearn(random_state = rand_state), True),
-            'dsr' : (sregs.DSR(), True),
-            'DAGSearch' : (dag_search.DAGRegressor(processes = 16, random_state = rand_state), True), 
-            'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 16, random_state = rand_state), True),
+            #'linreg' : (sregs.LinReg(), True),
+            #'polyreg2' : (sregs.PolyReg(degree= 2), True),
+            #'polyreg3' : (sregs.PolyReg(degree= 3), True),
+            #'MLP' : (sregs.MLP(random_state = rand_state), False),
+            #'operon' : (sregs.Operon(random_state = rand_state), True),
+            #'gplearn' : (sregs.GPlearn(random_state = rand_state), True),
+            #'dsr' : (sregs.DSR(), True),
+            'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
+            'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True),
             
         }
         # Elimination
@@ -981,7 +982,7 @@ if __name__ == '__main__':
             for regressor_name in regs:
                 if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
                     regressor, is_symb = regs[regressor_name]
-                    recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
+                    recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb, overwrite = overwrite)
 
     # ESR recovery experiment [done]
     if False:
