@@ -778,7 +778,6 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
             losses... list of losses for DAGs
             ops... list of ops that were tried
     '''
-    print(f'Order:  {order}')
     evaluate = True
     if loss_thresh is not None:
         # we are in parallel mode
