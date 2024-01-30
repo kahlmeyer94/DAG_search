@@ -752,7 +752,7 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
     else:
         return np.array([]), np.inf
         
-def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None, start_time:float = None, max_time:float = 3600, expect_evals:int = 10000, pareto:bool = False) -> tuple:
+def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None, start_time:float = None, max_time:float = 3600, expect_evals:int = 5000, pareto:bool = False) -> tuple:
     '''
     Given a build order (output of get_build_orders), tests all possible assignments of operators.
 
@@ -1030,7 +1030,7 @@ def is_pickleable(x:object) -> bool:
     except (pickle.PicklingError, AttributeError):
         return False
 
-def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 900.0, stop_thresh:float = -1.0, unique_loss:bool = True, pareto:bool = False, **params) -> dict:
+def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc_nodes:int = 1, n_processes:int = 1, topk:int = 5, verbose:int = 0, opt_mode:str = 'grid', max_orders:int = 10000, max_time:float = 900.0, stop_thresh:float = -1.0, unique_loss:bool = True, expect_evals:int = None, pareto:bool = False, **params) -> dict:
     '''
     Exhaustive search for a DAG.
 
@@ -1098,7 +1098,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         else:
             pbar = orders
         for order in pbar:
-            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time, pareto=pareto)
+            consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time, pareto=pareto, expect_evals=expect_evals)
             
             if pareto:
                 top_losses += losses
@@ -1163,7 +1163,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
                 break
     else:
 
-        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time, pareto] for order in orders]
+        args = [[order, m, n, k, X, loss_fkt, topk, opt_mode, stop_thresh, process_start_time, max_time, expect_evals, pareto] for order in orders]
         if verbose == 2:
             pbar = tqdm(args, total = len(args))
         else:
