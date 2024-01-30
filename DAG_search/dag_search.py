@@ -812,7 +812,6 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                     op_spaces.append([op for op in un_ops if op != '='])
             transl_dict[node] = i            
 
-        expect_evals = 10000
         if expect_evals is not None:
             v = np.log(expect_evals)
             log_space_size = 0
