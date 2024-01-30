@@ -752,23 +752,25 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
     else:
         return np.array([]), np.inf
         
-def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None, start_time:float = None, max_time:float = 3600, pareto:bool = False) -> tuple:
+def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt:callable, topk:int = 5, opt_mode:str = 'grid_zoom', loss_thresh:float = None, start_time:float = None, max_time:float = 3600, expect_evals:int = 10000, pareto:bool = False) -> tuple:
     '''
     Given a build order (output of get_build_orders), tests all possible assignments of operators.
 
     @Params:
-        order... list of tuples (node, parent_nodes)
-        m... number of input nodes
-        n... number of output nodes
-        k... number of constant nodes
-        X... input for DAGs
-        loss_fkt... function f where f(X, graph, const) indicates how good the DAG is
-        topk... number of top performers to be returned
-        opt_mode... one of {pool, opt, grid, grid_opt, grid_zoom} (see evaluate_cgraph function)
-        loss_thresh... only set in multiprocessing context - to communicate between processes for early stopping
-        start_time... if set, will not evaluate any orders after max_time seconds from start time
-        max_time... if set, will not evaluate any orders after max_time seconds from start time
-        pareto... if set, will return the pareto front instead of the top k
+        order...        list of tuples (node, parent_nodes)
+        m...            number of input nodes
+        n...            number of output nodes
+        k...            number of constant nodes
+        X...            input for DAGs
+        loss_fkt...     function f where f(X, graph, const) indicates how good the DAG is
+        topk...         number of top performers to be returned
+        opt_mode...     one of {pool, opt, grid, grid_opt, grid_zoom} (see evaluate_cgraph function)
+        loss_thresh...  only set in multiprocessing context - to communicate between processes for early stopping
+        start_time...   if set, will not evaluate any orders after max_time seconds from start time
+        max_time...     if set, will not evaluate any orders after max_time seconds from start time
+        expect_evals... operator assignments are chosen so that we evaluate at most this many graphs in expectation
+                        set to None if you want to go fully exhaustive
+        pareto...       if set, will return the pareto front instead of the top k
 
     @Returns:
         tuple:
@@ -776,7 +778,7 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
             losses... list of losses for DAGs
             ops... list of ops that were tried
     '''
-
+    print(f'Order:  {order}')
     evaluate = True
     if loss_thresh is not None:
         # we are in parallel mode
@@ -811,16 +813,31 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
                     op_spaces.append([op for op in un_ops if op != '='])
             transl_dict[node] = i            
 
-        
+        expect_evals = 10000
+        if expect_evals is not None:
+            v = np.log(expect_evals)
+            log_space_size = 0
+            for s in op_spaces:
+                log_space_size += np.log(len(s))
+            log_accept_ratio = min(0, v - log_space_size)
+            accept_ratio = np.exp(log_accept_ratio)
+        else:
+            accept_ratio = 1.0
+
 
         cgraph = None
 
+        # keeping track of invalids
         inv_array = []
         inv_mask = []
         for ops in itertools.product(*op_spaces):
-
             if (start_time is not None) and ((time.time() - start_time) >= max_time):
                 break
+            accept = True
+            if accept_ratio < 1.0:
+                accept = (np.random.rand() < accept_ratio)
+
+            
             if len(inv_array) > 0:
                 num_ops = np.array([config.NODE_ID[op] for op in ops])
                 is_inv = np.sum((inv_array - num_ops)*inv_mask, axis = 1)
@@ -828,14 +845,13 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
             else:
                 is_inv = False
 
-            if not is_inv:
+            if not is_inv and accept:
                 if cgraph is None:
                     cgraph = build_dag(order, ops, m, n, k)
                 else:
                     cgraph = adapt_ops(cgraph, order, ops)
 
                 consts, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode, loss_thresh)
-
                 if loss >= 1000 or (not np.isfinite(loss)):
                     evaluate = True
                     if loss_thresh is not None:
