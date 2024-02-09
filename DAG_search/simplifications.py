@@ -17,6 +17,26 @@ from DAG_search import utils
 
 
 ####################
+# Density Estimation
+####################
+from sklearn.neighbors import KernelDensity
+from sklearn.model_selection import GridSearchCV, LeaveOneOut, KFold
+
+def get_density_function(X):
+    # select bandwith using crossvalidation
+    bandwidths = 10 ** np.linspace(-2, 1, 50) # 0.01 to 10
+    grid = GridSearchCV(KernelDensity(kernel='gaussian'),
+                        {'bandwidth': bandwidths},
+                        cv=KFold(n_splits = 10))
+    grid.fit(X)
+
+    # estimate density
+    kde = KernelDensity(kernel='gaussian', bandwidth = grid.best_params_['bandwidth']).fit(X)
+    logprobs = kde.score_samples(X)
+    thresh = np.median(logprobs)
+    return kde, thresh
+
+####################
 # Function Approximation
 ####################
 from sklearn.linear_model import LinearRegression
@@ -26,44 +46,172 @@ class PolyReg():
     '''
     Regressor based on Polynomial Regression
     '''
-    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
+    def __init__(self, degree:int = 2, standardize:bool = True, **params):
         self.degree = degree
         self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
         self.regr = LinearRegression()
+        
+        self.standardize = standardize
+        self.X = None
+        self.y = None
+        
+
+
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+
+        if self.standardize:
+            mu_X = np.mean(self.X, axis = 0)
+            std_X = np.std(self.X, axis = 0)
+            X_norm = (self.X - mu_X)/std_X
+            X_poly = self.poly.fit_transform(X_norm)
+        else:
+            X_poly = self.poly.fit_transform(self.X)
+        self.regr.fit(X_poly, self.y)
+
+    def predict(self, X):
+        assert self.X is not None
+        if self.standardize:
+            mu_X = np.mean(self.X, axis = 0)
+            std_X = np.std(self.X, axis = 0)
+            X_norm = (X - mu_X)/std_X
+            X_poly = self.poly.fit_transform(X_norm)
+        else:
+            X_poly = self.poly.fit_transform(X)
+        pred = self.regr.predict(X_poly)
+        return pred
+
+def approximate_poly(X, y):
+    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    polydegrees = np.arange(1, 10, 1)
+    rmses = []
+    for degree in polydegrees:
+        f_appr = PolyReg(degree = degree)
+        f_appr.fit(X, y)
+        pred = f_appr.predict(X)
+        rmse = np.sqrt(np.mean((y - pred)**2))
+        rmses.append(rmse)
+        if rmse < 1e-5:
+            break
+    min_idx = np.argmin(rmses)
+    f_appr = PolyReg(degree = polydegrees[min_idx])
+    f_appr.fit(X, y)
+    return f_appr
+
+
+
+import torch
+import torch.optim as optim
+import torch.nn as nn
+from tqdm import tqdm
+import copy
+
+class Net(nn.Module):
+
+    def __init__(self, inp_dim:int, outp_dim:int):
+        '''
+        A simple feed forward network.
+        Feel free to change anything.
+
+        @Params:
+            inp_dim... dimension of input
+            outp_dim... dimension of output
+        '''
+
+        super(Net, self).__init__()
+        h_dim = 128
+        n_layers = 8
+        self.layers = nn.ModuleList()
+        self.layers.append(nn.Linear(inp_dim, h_dim))
+        self.layers.append(nn.BatchNorm1d(h_dim))
+        self.layers.append(nn.ELU())
+        
+        for _ in range(n_layers):
+            self.layers.append(nn.Linear(h_dim, h_dim))
+            self.layers.append(nn.ELU())
+        self.layers.append(nn.Linear(h_dim, outp_dim))
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+class MLP():
+    '''
+    Regressor based on Neural Net
+    '''
+    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
+        
+        self.net = None
+        self.verbose = verbose
+        self.random_state = random_state
         self.X = None
         self.y = None
         
     def fit(self, X, y):
         assert len(y.shape) == 1
+        np.random.seed(self.random_state)
+        torch.manual_seed(self.random_state)
+
+
         self.y = y.copy()
 
         if len(X.shape) == 1:
             self.X = X.reshape(-1, 1).copy()
         else:
             self.X = X.copy()
-        X_poly = self.poly.fit_transform(self.X)
-        self.regr.fit(X_poly, self.y)
+
+        self.net = Net(X.shape[1], 1)
+        inp_tensor = torch.as_tensor(self.X).float()
+        outp_tensor = torch.as_tensor(self.y.reshape(-1, 1)).float()  
+        
+        optimizer = optim.Adam(self.net.parameters(), lr=1e-3)
+        thresh = 1e-10
+        n_iterations = 1000
+
+        if self.verbose:
+            pbar = tqdm(range(n_iterations))
+        else:
+            pbar = range(n_iterations)
+
+        best_model = copy.deepcopy(self.net)
+        best_loss = np.inf
+        for _ in pbar:
+            optimizer.zero_grad()
+            pred = self.net(inp_tensor)
+            loss = torch.mean((outp_tensor - pred)**2)
+
+            loss.backward()
+            optimizer.step()
+            
+
+            if loss.item() < best_loss:
+                best_loss = loss.item()
+                best_model = copy.deepcopy(self.net)
+                if self.verbose:
+                    pbar.set_postfix({'loss' : loss.item()})
+            if loss.item() < thresh:
+                break
+        self.net = best_model
 
     def predict(self, X):
-        assert self.X is not None
-        X_poly = self.poly.fit_transform(X)
-        pred = self.regr.predict(X_poly)
-        return pred
-
-def approximate_poly(X, y):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    polydegrees = np.arange(1, 10, 1)
-    rmses = []
-    for degree in polydegrees:
-        f_appr = PolyReg(degree = degree)
-        f_appr.fit(X_train, y_train)
-        pred = f_appr.predict(X_test)
-        rmse = np.sqrt(np.mean((y_test - pred)**2))
-        rmses.append(rmse)
-        if rmse < 1e-5:
-            break
-    min_idx = np.argmin(rmses)
-    f_appr = PolyReg(degree = polydegrees[min_idx])
+        assert self.X is not None and self.net is not None, 'call .fit first!'
+        self.net.eval()
+        X_tensor = torch.as_tensor(X).float()
+        with torch.no_grad():
+            pred = self.net(X_tensor).detach().numpy()
+        return pred.flatten()
+   
+def approximate_NN(X, y):
+    f_appr = MLP(verbose = 2)
     f_appr.fit(X, y)
     return f_appr
 
@@ -73,202 +221,283 @@ def approximate_poly(X, y):
 # https://github.com/SJ001/AI-Feynman/blob/master/aifeynman/S_symmetry.py
 ####################
 
-def check_translational_symmetry_multiply(X, y, f_appr):
+def check_translational_symmetry_multiply(X, y, f_appr, density = None, density_thresh = None):
     # f(x, y) = f(x*y)?
     
     try:
-        # make the shift x->x+a for 2 variables at a time (different variables)
+        # make the shift x1->x1*a, x2->x2/a
         product = y.copy()
+        std_y = np.std(product)
         n_variables = X.shape[1]
-        a = 1.2
+        a = 1.1
         min_error = 1000
         best_i = -1
         best_j = -1
         best_mu = 0
-        best_sigma = 0
+        best_sigma = 0        
+        min_amount = math.ceil(0.05*len(X))
         for i in range(0, n_variables, 1):
             for j in range(0, n_variables, 1):
-                if i<j:
+                if i!=j:
+
                     fact_translate = X.copy()
                     fact_translate[:,i] = fact_translate[:,i] * a
                     fact_translate[:,j] = fact_translate[:,j] / a
-                    list_errs = abs(product - f_appr.predict(fact_translate))
-                    error = np.median(list_errs)
-                    mu = np.mean(np.log2(1+list_errs*2**30))
-                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    list_errs = abs(product - f_appr.predict(fact_translate))/std_y
+
+                    if (density is not None) and (density_thresh is not None):
+                        logprobs = density.score_samples(fact_translate)
+                        idxs, = np.where(logprobs > density_thresh)
+                        list_errs = list_errs[idxs]
+
+                    if len(list_errs) > min_amount:
+                        error = np.median(list_errs)
+                        mu = np.mean(np.log2(1+list_errs*2**30))
+                        sigma = np.std(np.log2(1+list_errs*2**30))
+                    else:
+                        error = 2*min_error
+
                     if error<min_error:
                         min_error = error
                         best_i = i
                         best_j = j
                         best_mu = mu
                         best_sigma = sigma
-        return {
-            'error' : min_error,
-            'i' : best_i,
-            'j' : best_j,
-            'mu' : best_mu,
-            'sigma' : best_sigma
-        }
+
+        if min_error == 1000:
+            return {}
+        else:
+            return {
+                'error' : min_error,
+                'i' : best_i,
+                'j' : best_j,
+                'mu' : best_mu,
+                'sigma' : best_sigma
+            }
     except Exception as e:
         print(e)
         return None
 
-def check_translational_symmetry_divide(X, y, f_appr):
+def check_translational_symmetry_divide(X, y, f_appr, density = None, density_thresh = None):
     # f(x, y) = f(x/y)?
     
     try:
-        # make the shift x->x+a for 2 variables at a time (different variables)
+        # make the shift x1->x1*a, x2->x2*a
         product = y.copy()
+        std_y = np.std(product)
+
         n_variables = X.shape[1]
-        a = 1.2
+        a = 1.1
         min_error = 1000
         best_i = -1
         best_j = -1
         best_mu = 0
         best_sigma = 0
+        min_amount = math.ceil(0.05*len(X))
         for i in range(0, n_variables, 1):
             for j in range(0, n_variables, 1):
-                if i<j:
+                if i != j:
+
                     fact_translate = X.copy()
                     fact_translate[:,i] = fact_translate[:,i] * a
                     fact_translate[:,j] = fact_translate[:,j] * a
-                    list_errs = abs(product - f_appr.predict(fact_translate))
-                    error = np.median(list_errs)
-                    mu = np.mean(np.log2(1+list_errs*2**30))
-                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    list_errs = abs(product - f_appr.predict(fact_translate))/std_y
+
+                    if (density is not None) and (density_thresh is not None):
+                        logprobs = density.score_samples(fact_translate)
+                        idxs, = np.where(logprobs > density_thresh)
+                        list_errs = list_errs[idxs]
+
+                    if len(list_errs) > min_amount:
+                        error = np.median(list_errs)
+                        mu = np.mean(np.log2(1+list_errs*2**30))
+                        sigma = np.std(np.log2(1+list_errs*2**30))
+                    else:
+                        error = 2*min_error
+
                     if error<min_error:
                         min_error = error
                         best_i = i
                         best_j = j
                         best_mu = mu
                         best_sigma = sigma
-        return {
-            'error' : min_error,
-            'i' : best_i,
-            'j' : best_j,
-            'mu' : best_mu,
-            'sigma' : best_sigma
-        }
+        if min_error == 1000:
+            return {}
+        else:
+            return {
+                'error' : min_error,
+                'i' : best_i,
+                'j' : best_j,
+                'mu' : best_mu,
+                'sigma' : best_sigma
+            }
     except Exception as e:
         print(e)
         return None
 
-def check_translational_symmetry_plus(X, y, f_appr):
+def check_translational_symmetry_plus(X, y, f_appr, density = None, density_thresh = None):
     # f(x, y) = f(x+y)?
     
     try:
-        # make the shift x->x+a for 2 variables at a time (different variables)
+        # make the shift x1->x1+a, x2->x2-a
         product = y.copy()
+        std_y = np.std(product)
+
         n_variables = X.shape[1]
         min_error = 1000
         best_i = -1
         best_j = -1
         best_mu = 0
-        best_sigma = 0
+        best_sigma = 0        
+        min_amount = math.ceil(0.05*len(X))
+
         for i in range(0, n_variables, 1):
             for j in range(0, n_variables, 1):
-                if i<j:
+                if i != j:
                     fact_translate = X.copy()
                     a = 0.5*min(np.std(fact_translate[:,i]), np.std(fact_translate[:,j]))
                     fact_translate[:,i] = fact_translate[:,i] + a
                     fact_translate[:,j] = fact_translate[:,j] - a
-                    list_errs = abs(product - f_appr.predict(fact_translate))
-                    error = np.median(list_errs)
-                    mu = np.mean(np.log2(1+list_errs*2**30))
-                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    list_errs = abs(product - f_appr.predict(fact_translate))/std_y
+
+                    if (density is not None) and (density_thresh is not None):
+                        logprobs = density.score_samples(fact_translate)
+                        idxs, = np.where(logprobs > density_thresh)
+                        list_errs = list_errs[idxs]
+
+                    if len(list_errs) > min_amount:
+                        error = np.median(list_errs)
+                        mu = np.mean(np.log2(1+list_errs*2**30))
+                        sigma = np.std(np.log2(1+list_errs*2**30))
+                    else:
+                        error = 2*min_error
                     if error<min_error:
                         min_error = error
                         best_i = i
                         best_j = j
                         best_mu = mu
                         best_sigma = sigma
-        return {
-            'error' : min_error,
-            'i' : best_i,
-            'j' : best_j,
-            'mu' : best_mu,
-            'sigma' : best_sigma
-        }
+        if min_error == 1000:
+            return {}
+        else:
+            return {
+                'error' : min_error,
+                'i' : best_i,
+                'j' : best_j,
+                'mu' : best_mu,
+                'sigma' : best_sigma
+            }
     except Exception as e:
         print(e)
         return None
 
-def check_translational_symmetry_minus(X, y, f_appr):
+def check_translational_symmetry_minus(X, y, f_appr, density = None, density_thresh = None):
     # f(x, y) = f(x-y)?
     
     try:
-        # make the shift x->x+a for 2 variables at a time (different variables)
-        product = y.copy()
+        # make the shift x1->x1+a, x2->x2+a
+        product = y.copy()    
+        std_y = np.std(product)
+
         n_variables = X.shape[1]
         min_error = 1000
         best_i = -1
         best_j = -1
         best_mu = 0
         best_sigma = 0
+        min_amount = math.ceil(0.05*len(X))
+
         for i in range(0, n_variables, 1):
             for j in range(0, n_variables, 1):
-                if i<j:
+                if i != j:
                     fact_translate = X.copy()
                     a = 0.5*min(np.std(fact_translate[:,i]), np.std(fact_translate[:,j]))
                     fact_translate[:,i] = fact_translate[:,i] + a
                     fact_translate[:,j] = fact_translate[:,j] + a
-                    list_errs = abs(product - f_appr.predict(fact_translate))
-                    error = np.median(list_errs)
-                    mu = np.mean(np.log2(1+list_errs*2**30))
-                    sigma = np.std(np.log2(1+list_errs*2**30))
+                    list_errs = abs(product - f_appr.predict(fact_translate))/std_y
+
+                    if (density is not None) and (density_thresh is not None):
+                        logprobs = density.score_samples(fact_translate)
+                        idxs, = np.where(logprobs > density_thresh)
+                        list_errs = list_errs[idxs]
+
+                    if len(list_errs) > min_amount:
+                        error = np.median(list_errs)
+                        mu = np.mean(np.log2(1+list_errs*2**30))
+                        sigma = np.std(np.log2(1+list_errs*2**30))
+                    else:
+                        error = 2*min_error
                     if error<min_error:
                         min_error = error
                         best_i = i
                         best_j = j
                         best_mu = mu
                         best_sigma = sigma
-        return {
-            'error' : min_error,
-            'i' : best_i,
-            'j' : best_j,
-            'mu' : best_mu,
-            'sigma' : best_sigma
-        }
+        if min_error == 1000:
+            return {}
+        else:
+            return {
+                'error' : min_error,
+                'i' : best_i,
+                'j' : best_j,
+                'mu' : best_mu,
+                'sigma' : best_sigma
+            }
     except Exception as e:
         print(e)
         return None
 
-def check_dummy_variable(X, y, f_appr):
+def check_dummy_variable(X, y, f_appr, density = None, density_thresh = None):
     # f(x, y) = f(x)?
     
     try:
+        # randomly permute entries of x
+
         product = y.copy()
+        std_y = np.std(product)
+
         n_variables = X.shape[1]
         min_error = 1000
         best_i = -1
-        best_j = -1
         best_mu = 0
         best_sigma = 0
+        min_amount = math.ceil(0.05*len(X))
+
         for i in range(0, n_variables, 1):
             fact_translate = X.copy()
-            permute_idxs = np.arange(len(X))
-            np.random.shuffle(permute_idxs)
-            fact_translate[:,i] = fact_translate[:,i][permute_idxs]
-            list_errs = abs(product - f_appr.predict(fact_translate))
-            error = np.median(list_errs)
-            mu = np.mean(np.log2(1+list_errs*2**30))
-            sigma = np.std(np.log2(1+list_errs*2**30))
+            fact_translate[:,i] = np.mean(fact_translate[:,i])
+            list_errs = abs(product - f_appr.predict(fact_translate))/std_y
+
+            if (density is not None) and (density_thresh is not None):
+                logprobs = density.score_samples(fact_translate)
+                idxs, = np.where(logprobs > density_thresh)
+                list_errs = list_errs[idxs]
+
+            if len(list_errs) > min_amount:
+                error = np.median(list_errs)
+                mu = np.mean(np.log2(1+list_errs*2**30))
+                sigma = np.std(np.log2(1+list_errs*2**30))
+            else:
+                error = 2*min_error
             if error<min_error:
                 min_error = error
                 best_i = i
                 best_mu = mu
                 best_sigma = sigma
-        return {
-            'error' : min_error,
-            'i' : best_i,
-            'mu' : best_mu,
-            'sigma' : best_sigma
-        }
+        if min_error == 1000:
+            return {}
+        else:
+            return {
+                'error' : min_error,
+                'i' : best_i,
+                'mu' : best_mu,
+                'sigma' : best_sigma
+            }
     except Exception as e:
         print(e)
         return None
     
-def find_best_elimination(X, y, f_appr, transl_dict):
+def find_best_elimination(X, y, f_appr, transl_dict, density = None, density_thresh = None, verbose = 0):
 
     # Find best eliminations
     best_error = np.inf
@@ -276,7 +505,9 @@ def find_best_elimination(X, y, f_appr, transl_dict):
     best_transl = transl_dict
 
     # x-y
-    res = check_translational_symmetry_minus(X, y, f_appr)
+    res = check_translational_symmetry_minus(X, y, f_appr, density, density_thresh)
+    if verbose > 0 and 'error' in res:
+        print(f'Sub: {res["error"]}')
     if 'error' in res and res['error'] < best_error:
         best_error = res['error']
         i, j = res['i'], res['j']
@@ -286,7 +517,9 @@ def find_best_elimination(X, y, f_appr, transl_dict):
             if k not in [i, j]:
                 best_transl[len(best_transl)] = transl_dict[k]
     # x+y
-    res = check_translational_symmetry_plus(X, y, f_appr)
+    res = check_translational_symmetry_plus(X, y, f_appr, density, density_thresh)
+    if verbose > 0 and 'error' in res:
+        print(f'Plus: {res["error"]}')
     if 'error' in res and res['error'] < best_error:
         best_error = res['error']
 
@@ -298,7 +531,9 @@ def find_best_elimination(X, y, f_appr, transl_dict):
                 best_transl[len(best_transl)] = transl_dict[k]
 
     # x*y
-    res = check_translational_symmetry_multiply(X, y, f_appr)
+    res = check_translational_symmetry_multiply(X, y, f_appr, density, density_thresh)
+    if verbose > 0 and 'error' in res:
+        print(f'Mult: {res["error"]}')
     if 'error' in res and res['error'] < best_error:
         best_error = res['error']
 
@@ -310,7 +545,9 @@ def find_best_elimination(X, y, f_appr, transl_dict):
                 best_transl[len(best_transl)] = transl_dict[k]
 
     # x/y
-    res = check_translational_symmetry_divide(X, y, f_appr)
+    res = check_translational_symmetry_divide(X, y, f_appr, density, density_thresh)
+    if verbose > 0 and 'error' in res:
+        print(f'Div: {res["error"]}')
     if 'error' in res and res['error'] < best_error:    
         best_error = res['error']
 
@@ -322,43 +559,65 @@ def find_best_elimination(X, y, f_appr, transl_dict):
                 best_transl[len(best_transl)] = transl_dict[k]
 
     # x dummy
-    res = check_dummy_variable(X, y, f_appr)
-    if 'error' in res and res['error'] < best_error:
-        best_error = res['error']
+    if False:
+        res = check_dummy_variable(X, y, f_appr, density, density_thresh)
+        if verbose > 0 and 'error' in res:
+            print(f'Dummy: {res["error"]}')
+        if 'error' in res and res['error'] < best_error:
+            best_error = res['error']
 
-        i = res['i']
-        best_X = np.column_stack([X[:, k] for k in range(X.shape[1]) if k not in [i]])
-        best_transl = {}
-        for k in range(X.shape[1]):
-            if k not in [i]:
-                best_transl[len(best_transl)] = transl_dict[k]
+            i = res['i']
+            best_X = np.column_stack([X[:, k] for k in range(X.shape[1]) if k not in [i]])
+            best_transl = {}
+            for k in range(X.shape[1]):
+                if k not in [i]:
+                    best_transl[len(best_transl)] = transl_dict[k]
+        
+        
     return {'error' : best_error, 'X' : best_X, 'transl' : best_transl}
 
-def eliminate(X, y, fit_func = approximate_poly, rmse_thresh = 1e-3, elim_thresh = 1e-3):
+def eliminate(X, y, fit_func = approximate_poly, rmse_thresh = 1e-3, elim_thresh = 1e-1, use_density = True, verbose:int = 0):
+
 
     X_tmp = X.copy()
     transl_dict = {i : f'z_{i}' for i in range(X.shape[1])}
     searching = X_tmp.shape[1] > 1
 
+    dicts = [copy.deepcopy(transl_dict)]
+    Xs = [X_tmp.copy()]
     while searching:
         f_appr = fit_func(X_tmp, y)
         pred = f_appr.predict(X_tmp)
         rmse = np.sqrt(np.mean((y-pred)**2))
+
+        if use_density:
+            density, density_thresh = get_density_function(X_tmp)
+        else:
+            density = None
+            density_thresh = None
         
         if rmse < rmse_thresh:
 
-            elim_res = find_best_elimination(X_tmp, y, f_appr, transl_dict)
+            elim_res = find_best_elimination(X_tmp, y, f_appr, transl_dict, density, density_thresh, verbose = verbose)
 
             if elim_res['error'] < elim_thresh:
                 X_tmp = elim_res['X']
                 transl_dict = elim_res['transl']
                 searching = X_tmp.shape[1] > 1
+                if verbose > 0:
+                    print(transl_dict)
+
+
+                dicts.append(copy.deepcopy(transl_dict))
+                Xs.append(X_tmp.copy())
             else:
                 searching = False
         else:
             searching = False
             
-    return X_tmp, transl_dict
+    if verbose > 0:
+        print('done')
+    return Xs, dicts
 
 ####################
 # Regressor
@@ -397,19 +656,33 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
 
         if verbose > 0:
             print('Recursively searching for Eliminations')
-        X_new, transl_dict = eliminate(X, y)
 
+        Xs, dicts = eliminate(X, y, verbose=verbose)
+        
         if verbose > 0:
-            print(f'Size of new problem: {X_new.shape[1]} (old: {X.shape[1]})')
+            print(f'Created {len(Xs)} regression problems.')
 
-        # solving with Symbolic regressor
-        self.symb_regr.fit(X_new, y, verbose = verbose)
-        expr = str(self.symb_regr.model())
-        for i in transl_dict:
-            expr = expr.replace(f'x_{i}', f'({transl_dict[i]})')
-        expr = expr.replace('z_', 'x_')
-        self.expr = sympy.sympify(expr)
-        self.exec_func = sympy.lambdify(x_symbs, self.expr)
+        # try all simplifications + keep best one
+        best_score = -np.inf
+        for X_new, transl_dict in zip(reversed(Xs), reversed(dicts)):
+            if verbose > 0:
+                print(f'Size of new problem: {X_new.shape[1]} (original: {X.shape[1]})')
+
+            # solving with Symbolic regressor
+            self.symb_regr.fit(X_new, y, verbose = verbose)
+            pred = self.symb_regr.predict(X_new)
+            score = r2_score(y, pred)
+
+            if verbose > 0:
+                print(f'Score: {score}')
+            if score > best_score:
+                best_score = score
+                expr = str(self.symb_regr.model())
+                for i in transl_dict:
+                    expr = expr.replace(f'x_{i}', f'({transl_dict[i]})')
+                expr = expr.replace('z_', 'x_')
+                self.expr = sympy.sympify(expr)
+                self.exec_func = sympy.lambdify(x_symbs, self.expr)
 
         return self
 

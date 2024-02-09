@@ -357,6 +357,44 @@ def jaccard_idx(expr1, expr2):
     S1 = set([str(subexpr) for subexpr in get_subexprs_sympy(tmp_expr2)])
     return len(S0&S1)/len(S0|S1)
 
+def is_substitution(expr, subexpr) -> bool:
+    '''
+    Given an expression and a subexpression, checks if the subexpression is a valid substitution.
+    Example:
+    For a given expression x_0*x_1/x_2 the following subexpressions are valid substitutions:
+    - x_0*x_1 -> z/x_2
+    - x_0/x_2 -> z*x_1
+    - x_1/x_2 -> x_0*z
+
+    
+    @Params:
+        expr... sympy expression
+        subexpr... sympy expression
+
+    @Returns:
+        True, if subexpr is a valid substitution
+    '''
+
+    # assumption: variables are named x_i (no curly brackets)
+    subs_idx = sorted([int(str(x).split('_')[-1]) for x in subexpr.free_symbols if '_' in str(x)])
+    z = sympy.Symbol('z')
+    repl_expr = expr.subs({
+        subexpr: z, # ident
+        1/subexpr: 1/z, # inverse
+        -subexpr: -z, # negate
+        subexpr**2 : z**2, # square
+        sympy.sqrt(subexpr) : sympy.sqrt(z), # square-root
+        sympy.sin(subexpr) : sympy.sin(z), # sine
+        sympy.cos(subexpr) : sympy.cos(z), # cosine
+        sympy.log(subexpr) : sympy.log(z), # log
+        sympy.exp(subexpr) : sympy.exp(z), # exp
+    } )
+
+    for x in repl_expr.free_symbols:
+        if '_' in str(x):
+            if int(str(x).split('_')[-1]) in subs_idx:
+                return False
+    return True
 
 #####################################
 # Symbolic Distance Measures
