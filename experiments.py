@@ -872,17 +872,20 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 def niklas_experiment():
     save_path = 'datasets/Tensor/results.p'
 
-    results_dict = {}
-    if False:
-        # X1, y1
-        mode = 'standard'
-        load_path = f'datasets/Tensor/features_mm.npy'
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as handle:
+            results_dict = pickle.load(handle)
+    else:
+        results_dict = {}
+    #for mode in ['transformed_weighted', 'weighted_2']:
+    for mode in ['weighted_2']:
+        load_path = f'datasets/Tensor/features_mm_{mode}.npy'
         X = np.load(load_path)
-        load_path = f'datasets/Tensor/runtimes_mm.npy'
+        load_path = f'datasets/Tensor/runtimes_mm_{mode}.npy'
         y = np.load(load_path)
 
         results_dict[mode] = {}
-        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 10, max_orders = int(1e7), max_time = 5*3600)
+        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 5, max_orders = int(1e7), max_time = 5*3600)
         est.fit(X, y, verbose = 2)
         results_dict[mode] = {
             'expr' : est.model(),
@@ -891,39 +894,6 @@ def niklas_experiment():
         with open(save_path, 'wb') as handle:
             pickle.dump(results_dict, handle) 
 
-    if False:
-        mode = 'transformed'
-        load_path = f'datasets/Tensor/features_mm_transformed.npy'
-        X = np.load(load_path)
-        load_path = f'datasets/Tensor/runtimes_mm_transformed.npy'
-        y = np.load(load_path)
-
-        results_dict[mode] = {}
-        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 10, max_orders = int(1e7), max_time = 5*3600)
-        est.fit(X, y, verbose = 2)
-        results_dict[mode] = {
-            'expr' : est.model(),
-            'pred' : est.predict(X)
-        }
-        with open(save_path, 'wb') as handle:
-            pickle.dump(results_dict, handle) 
-
-    if True:
-        mode = 'weighted'
-        load_path = f'datasets/Tensor/features_mm_weighted.npy'
-        X = np.load(load_path)
-        load_path = f'datasets/Tensor/runtimes_mm_weighted.npy'
-        y = np.load(load_path)
-
-        results_dict[mode] = {}
-        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 10, max_orders = int(1e7), max_time = 5*3600)
-        est.fit(X, y, verbose = 2)
-        results_dict[mode] = {
-            'expr' : est.model(),
-            'pred' : est.predict(X)
-        }
-        with open(save_path, 'wb') as handle:
-            pickle.dump(results_dict, handle) 
 
 if __name__ == '__main__':
     
