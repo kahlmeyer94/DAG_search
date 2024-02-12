@@ -650,6 +650,8 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         '''
         assert len(y.shape) == 1, f'y must be 1-dimensional (current shape: {y.shape})'
         
+
+        r2_thresh = 1-1e-8 # if solution is found with higher r2 score than this: early stop
         x_symbs = [f'x_{i}' for i in range(X.shape[1])]
 
         self.positives = np.all(X > 0, axis = 0)
@@ -683,6 +685,10 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
                 expr = expr.replace('z_', 'x_')
                 self.expr = sympy.sympify(expr)
                 self.exec_func = sympy.lambdify(x_symbs, self.expr)
+            if score > r2_thresh:
+                if verbose > 0:
+                    print('Early stopping because solution has been found!')
+                break
 
         return self
 
