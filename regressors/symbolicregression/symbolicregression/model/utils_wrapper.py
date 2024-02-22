@@ -71,7 +71,9 @@ class Scaler(ABC):
             if prefix[idx].startswith("x_"):
                 k = int(prefix[idx][-1])
                 if k>=len(a): 
-                    continue
+                    # should not be, but happens somehow! (fixed by me)
+                    k = len(a) - 1
+                    prefix[idx] = f'x_{k}'
                 a_k, b_k = str(a[k]), str(b[k])
                 prefix_to_add = ["add", b_k, "mul", a_k, prefix[idx]]
                 prefix = prefix[:idx] + prefix_to_add + prefix[min(idx + 1, len(prefix)):]
