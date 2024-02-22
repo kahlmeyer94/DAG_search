@@ -4,6 +4,8 @@ import numpy as np
 import os
 from tqdm import tqdm
 import itertools
+import sys
+import requests
 
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
@@ -416,7 +418,12 @@ class Operon():
         assert self.X is not None
         names = [f'x_{i}' for i in range(self.X.shape[1])]
         model_str = self.regressor_operon.get_model_string(self.regressor_operon.model_, names = names)
-        return sympy.sympify(model_str)
+        expr = sympy.sympify(model_str)
+        for x in expr.free_symbols:
+            idx = int(str(x).split('_')[-1])
+            if self.positives[idx]:
+                expr = expr.subs(x, sympy.Symbol(str(x), positive = True))
+        return expr
     
 class GPlearn():
     '''
@@ -475,7 +482,12 @@ class GPlearn():
         assert self.X is not None
         for i in range(self.X.shape[1]):
             self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True, positive = self.positives[i])
-        return sympy.sympify(str(self.est_gp._program), locals=self.converter)
+        expr = sympy.sympify(str(self.est_gp._program), locals=self.converter)
+        for x in expr.free_symbols:
+            idx = int(str(x).split('_')[-1])
+            if self.positives[idx]:
+                expr = expr.subs(x, sympy.Symbol(str(x), positive = True))
+        return expr
 
 class DSR():
     '''
@@ -552,6 +564,8 @@ class DSR():
 class Transformer():
 
     def __init__(self, verbose:int = 0, random_state:int = 0, **params):
+        
+        sys.path.insert(0, 'regressors/symbolicregression')
         from symbolicregression.model import SymbolicTransformerRegressor
         
         if random_state is not None:
@@ -564,9 +578,10 @@ class Transformer():
         self.regr = SymbolicTransformerRegressor(model=self.pt_model, rescale=True)
         self.X = None
         self.y = None
+        self.positives = []
   
     def load_transformer_(self):
-        model_path = os.path.join('symbolicregression', 'model.pt')
+        model_path = os.path.join('regressors', 'symbolicregression', 'model.pt')
         model = None
         try:
             if not os.path.isfile(model_path): 
@@ -610,9 +625,15 @@ class Transformer():
                 model_str = model_str.replace(op,replace_op)
             self.expr = sympy.parse_expr(model_str)
         
+        for x in self.expr.free_symbols:
+            idx = int(str(x).split('_')[-1])
+            if self.positives[idx]:
+                self.expr = self.expr.subs(x, sympy.Symbol(str(x), positive = True))
+        
     def fit(self, X, y):
         assert len(y.shape) == 1
         self.y = y.copy()
+        self.positives = np.all(X > 0, axis = 0)
 
         if len(X.shape) == 1:
             self.X = X.reshape(-1, 1).copy()
