@@ -938,15 +938,14 @@ if __name__ == '__main__':
             #'operon' : (sregs.Operon(random_state = rand_state), True),
             #'gplearn' : (sregs.GPlearn(random_state = rand_state), True),
             #'dsr' : (sregs.DSR(), True),
+            #'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True),
             'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
-            'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True),
+
             
         }
         # Elimination
         symb_regr = regs['DAGSearch'][0]
         regs['ElimDAGSearch'] = (simplifications.EliminationRegressor(symb_regr), True)
-        symb_regr = regs['DAGSearchPoly'][0]
-        regs['ElimDAGSearchPoly'] = (simplifications.EliminationRegressor(symb_regr), True)
         
         for ds_name in problems:
             for regressor_name in regs:
