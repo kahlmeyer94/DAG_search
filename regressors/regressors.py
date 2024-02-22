@@ -565,9 +565,9 @@ class Transformer():
 
     def __init__(self, verbose:int = 0, random_state:int = 0, **params):
         
-        sys.path.insert(0, os.path.join('regressors','symbolicregression'))
+        sys.path.insert(0, os.path.join(os.getcwd(), 'regressors', 'symbolicregression'))
 
-        from symbolicregression.model import SymbolicTransformerRegressor
+        from model import SymbolicTransformerRegressor
         
         if random_state is not None:
             np.random.seed(random_state)
@@ -631,7 +631,7 @@ class Transformer():
             if self.positives[idx]:
                 self.expr = self.expr.subs(x, sympy.Symbol(str(x), positive = True))
         
-    def fit(self, X, y):
+    def fit(self, X, y, verbose = 0):
         assert len(y.shape) == 1
         self.y = y.copy()
         self.positives = np.all(X > 0, axis = 0)

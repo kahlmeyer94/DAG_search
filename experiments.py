@@ -97,6 +97,9 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
                 all_rec.append(rec)
 
                 print(f'Recovery: {rec}')
+                for target, pred in zip(all_y_train, all_pred_train):
+                    mse = np.mean((target - pred)**2)
+                    print(f'MSE: {mse}')
 
         
             results[problem] = {
