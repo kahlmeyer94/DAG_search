@@ -565,7 +565,8 @@ class Transformer():
 
     def __init__(self, verbose:int = 0, random_state:int = 0, **params):
         
-        sys.path.insert(0, 'regressors/symbolicregression')
+        sys.path.insert(0, os.path.join('regressors','symbolicregression'))
+
         from symbolicregression.model import SymbolicTransformerRegressor
         
         if random_state is not None:
