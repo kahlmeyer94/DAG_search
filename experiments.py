@@ -927,7 +927,7 @@ if __name__ == '__main__':
 
     # Recovery experiment [done]
     if True:
-        overwrite = True
+        overwrite = False
         rand_state = 0
         #problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         problems = ['Feynman', 'Feynman_bonus', 'Strogatz', 'Nguyen', 'Univ']
