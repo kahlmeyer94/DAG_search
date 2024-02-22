@@ -393,9 +393,11 @@ class Operon():
         self.regressor_operon = OperonRegressor(random_state = random_state)
         self.X = None
         self.y = None
+        self.positives = []
         
     def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
+        self.positives = np.all(X > 0, axis = 0)
         self.y = y.copy()
 
         if len(X.shape) == 1:
@@ -450,9 +452,11 @@ class GPlearn():
         
         self.X = None
         self.y = None
+        self.positives = []
         
     def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
+        self.positives = np.all(X > 0, axis = 0)
         self.y = y.copy()
         if len(X.shape) == 1:
             self.X = X.reshape(-1, 1).copy()
@@ -470,7 +474,7 @@ class GPlearn():
     def model(self):
         assert self.X is not None
         for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
+            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True, positive = self.positives[i])
         return sympy.sympify(str(self.est_gp._program), locals=self.converter)
 
 class DSR():
@@ -512,9 +516,11 @@ class DSR():
         
         self.X = None
         self.y = None
+        self.positives = []
         
     def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
+        self.positives = np.all(X > 0, axis = 0)
         self.y = y.copy()
 
         if len(X.shape) == 1:
@@ -540,6 +546,88 @@ class DSR():
             symb_dict[idx] = x
             
         for i in symb_dict:
-            expr = expr.subs(symb_dict[i], sympy.symbols(f'x_{i-1}', real = True))
+            expr = expr.subs(symb_dict[i], sympy.symbols(f'x_{i-1}', real = True, positive = self.positives[i-1]))
         return expr
 
+class Transformer():
+
+    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
+        from symbolicregression.model import SymbolicTransformerRegressor
+        
+        if random_state is not None:
+            np.random.seed(random_state)
+            torch.manual_seed(random_state)
+
+        self.pt_model = self.load_transformer_()
+        #self.pt_model.max_generated_output_len = 20
+        #self.pt_model.beam_size = 100
+        self.regr = SymbolicTransformerRegressor(model=self.pt_model, rescale=True)
+        self.X = None
+        self.y = None
+  
+    def load_transformer_(self):
+        model_path = os.path.join('symbolicregression', 'model.pt')
+        model = None
+        try:
+            if not os.path.isfile(model_path): 
+                url = "https://dl.fbaipublicfiles.com/symbolicregression/model1.pt"
+                r = requests.get(url, allow_redirects=True)
+                open(model_path, 'wb').write(r.content)
+
+            if os.name == 'nt':
+                import pathlib
+                temp = pathlib.PosixPath
+                pathlib.PosixPath = pathlib.WindowsPath    
+            model = torch.load(model_path, map_location=torch.device('cpu'))
+            
+        except Exception as e:
+            print("ERROR: model not loaded! path was: {}".format(model_path))
+            print(e)    
+        
+        return model
+
+    def translate_transformer_(self):
+        replace_ops = {"add": "+", "mul": "*", "sub": "-", "pow": "**", "inv": "1/"}
+
+        if self.regr.tree is None:
+            print('zero')
+            self.expr = sympy.sympify('0')
+            self.func = lambda X: np.zeros((len(X), 1))
+        elif self.regr.tree[0] is None: 
+            print('zero')
+            self.expr = sympy.sympify('0')
+            self.func = lambda X: np.zeros((len(X), 1))
+        else:
+            model_list = self.regr.tree[0][0]
+            if "relabed_predicted_tree" in model_list:
+                tree = model_list["relabed_predicted_tree"]
+            else:
+                tree = model_list["predicted_tree"]
+            self.func = self.regr.model.env.simplifier.tree_to_numexpr_fn(tree)
+                
+            model_str = tree.infix()
+            for op,replace_op in replace_ops.items():
+                model_str = model_str.replace(op,replace_op)
+            self.expr = sympy.parse_expr(model_str)
+        
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.regr.fit(self.X, self.y)
+            self.translate_transformer_()
+
+    def predict(self, X):
+        assert hasattr(self, 'func')
+        pred = self.func(X)[:, 0]
+        return pred
+
+    def model(self):
+        assert hasattr(self, 'expr')
+        return self.expr
