@@ -4,6 +4,8 @@ import numpy as np
 import os
 from tqdm import tqdm
 import itertools
+import sys
+import requests
 
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
@@ -393,9 +395,11 @@ class Operon():
         self.regressor_operon = OperonRegressor(random_state = random_state)
         self.X = None
         self.y = None
+        self.positives = []
         
     def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
+        self.positives = np.all(X > 0, axis = 0)
         self.y = y.copy()
 
         if len(X.shape) == 1:
@@ -414,7 +418,12 @@ class Operon():
         assert self.X is not None
         names = [f'x_{i}' for i in range(self.X.shape[1])]
         model_str = self.regressor_operon.get_model_string(self.regressor_operon.model_, names = names)
-        return sympy.sympify(model_str)
+        expr = sympy.sympify(model_str)
+        for x in expr.free_symbols:
+            idx = int(str(x).split('_')[-1])
+            if self.positives[idx]:
+                expr = expr.subs(x, sympy.Symbol(str(x), positive = True))
+        return expr
     
 class GPlearn():
     '''
@@ -450,9 +459,11 @@ class GPlearn():
         
         self.X = None
         self.y = None
+        self.positives = []
         
     def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
+        self.positives = np.all(X > 0, axis = 0)
         self.y = y.copy()
         if len(X.shape) == 1:
             self.X = X.reshape(-1, 1).copy()
@@ -470,141 +481,13 @@ class GPlearn():
     def model(self):
         assert self.X is not None
         for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
-        return sympy.sympify(str(self.est_gp._program), locals=self.converter)
-
-class GPlearn_local():
-    '''
-    Regressor based on gplearn. No crossover!
-    '''
-    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
-
-        import gplearn
-        from gplearn.genetic import SymbolicRegressor as GPlearnRegressor
-
-        self.converter = {
-            'add': lambda x, y : x + y,
-            'sub' : lambda x, y: x - y,
-            'mul': lambda x, y : x * y,
-            'div' : lambda x, y: x / y,
-            'neg': lambda x : -x,
-            'inv': lambda x : 1/x,
-            'sin' : lambda x: sympy.sin(x),
-            'cos' : lambda x: sympy.cos(x),
-            'log' : lambda x: sympy.log(x),
-            'sqrt' : lambda x: sympy.sqrt(x),
-        }
-        funcs = list(self.converter.keys())
-        
-        
-        params = {
-            'function_set' : funcs,
-            'verbose' : verbose,
-            'random_state' : random_state,
-            'p_crossover' : 0.0,
-            'p_subtree_mutation' : 0.4,
-            'p_hoist_mutation' : 0.4,
-            'p_point_mutation' : 0.2
-        }
-
-        self.est_gp = GPlearnRegressor(**params)
-        
-        self.X = None
-        self.y = None
-        
-    def fit(self, X, y):
-        assert len(y.shape) == 1
-        self.y = y.copy()
-        if len(X.shape) == 1:
-            self.X = X.reshape(-1, 1).copy()
-        else:
-            self.X = X.copy()
-        for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
-        self.est_gp.fit(self.X, self.y)
-
-    def predict(self, X):
-        assert self.X is not None
-        pred = self.est_gp.predict(X)
-        return pred.flatten()
-
-    def model(self):
-        assert self.X is not None
-        for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
-        return sympy.sympify(str(self.est_gp._program), locals=self.converter)
-
-class GPlearn_restart():
-    '''
-    Regressor based on gplearn. No crossover!
-    '''
-    def __init__(self, verbose:int = 0, random_state:int = 0, n_restarts:int = 5, **params):
-
-        import gplearn
-        from gplearn.genetic import SymbolicRegressor as GPlearnRegressor
-
-        self.converter = {
-            'add': lambda x, y : x + y,
-            'sub' : lambda x, y: x - y,
-            'mul': lambda x, y : x * y,
-            'div' : lambda x, y: x / y,
-            'neg': lambda x : -x,
-            'inv': lambda x : 1/x,
-            'sin' : lambda x: sympy.sin(x),
-            'cos' : lambda x: sympy.cos(x),
-            'log' : lambda x: sympy.log(x),
-            'sqrt' : lambda x: sympy.sqrt(x),
-        }
-        funcs = list(self.converter.keys())
-        
-        
-        params = {
-            'function_set' : funcs,
-            'verbose' : verbose,
-            'random_state' : random_state,
-            'p_crossover' : 0.0,
-            'p_subtree_mutation' : 0.4,
-            'p_hoist_mutation' : 0.4,
-            'p_point_mutation' : 0.2
-        }
-        self.gps = []
-        for i in range(n_restarts):
-            params['random_state'] = random_state + 100*i
-            gp = GPlearnRegressor(**params)
-            self.gps.append(gp)
-
-        self.est_gp = None
-        
-        self.X = None
-        self.y = None
-        
-    def fit(self, X, y):
-        assert len(y.shape) == 1
-        self.y = y.copy()
-        if len(X.shape) == 1:
-            self.X = X.reshape(-1, 1).copy()
-        else:
-            self.X = X.copy()
-        for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
-
-        for i, gp in enumerate(self.gps):
-            self.gps[i] = gp.fit(self.X, self.y)
-
-        # evaluate
-        scores = [gp._program.fitness_ for gp in self.gps]
-        self.est_gp = self.gps[np.argmin(scores)]
-
-    def predict(self, X):
-        assert self.X is not None
-        pred = self.est_gp.predict(X)
-        return pred.flatten()
-
-    def model(self):
-        assert self.X is not None
-        for i in range(self.X.shape[1]):
-            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True)
-        return sympy.sympify(str(self.est_gp._program), locals=self.converter)
+            self.converter[f'X{i}'] = sympy.symbols(f'x_{i}', real = True, positive = self.positives[i])
+        expr = sympy.sympify(str(self.est_gp._program), locals=self.converter)
+        for x in expr.free_symbols:
+            idx = int(str(x).split('_')[-1])
+            if self.positives[idx]:
+                expr = expr.subs(x, sympy.Symbol(str(x), positive = True))
+        return expr
 
 class DSR():
     '''
@@ -645,9 +528,11 @@ class DSR():
         
         self.X = None
         self.y = None
+        self.positives = []
         
     def fit(self, X, y, verbose=0):
         assert len(y.shape) == 1
+        self.positives = np.all(X > 0, axis = 0)
         self.y = y.copy()
 
         if len(X.shape) == 1:
@@ -673,6 +558,97 @@ class DSR():
             symb_dict[idx] = x
             
         for i in symb_dict:
-            expr = expr.subs(symb_dict[i], sympy.symbols(f'x_{i-1}', real = True))
+            expr = expr.subs(symb_dict[i], sympy.symbols(f'x_{i-1}', real = True, positive = self.positives[i-1]))
         return expr
 
+class Transformer():
+
+    def __init__(self, verbose:int = 0, random_state:int = 0, **params):
+        
+        sys.path.insert(0, 'regressors/symbolicregression')
+        from symbolicregression.model import SymbolicTransformerRegressor
+        
+        if random_state is not None:
+            np.random.seed(random_state)
+            torch.manual_seed(random_state)
+
+        self.pt_model = self.load_transformer_()
+        #self.pt_model.max_generated_output_len = 20
+        #self.pt_model.beam_size = 100
+        self.regr = SymbolicTransformerRegressor(model=self.pt_model, rescale=True)
+        self.X = None
+        self.y = None
+        self.positives = []
+  
+    def load_transformer_(self):
+        model_path = os.path.join('regressors', 'symbolicregression', 'model.pt')
+        model = None
+        try:
+            if not os.path.isfile(model_path): 
+                url = "https://dl.fbaipublicfiles.com/symbolicregression/model1.pt"
+                r = requests.get(url, allow_redirects=True)
+                open(model_path, 'wb').write(r.content)
+
+            if os.name == 'nt':
+                import pathlib
+                temp = pathlib.PosixPath
+                pathlib.PosixPath = pathlib.WindowsPath    
+            model = torch.load(model_path, map_location=torch.device('cpu'))
+            
+        except Exception as e:
+            print("ERROR: model not loaded! path was: {}".format(model_path))
+            print(e)    
+        
+        return model
+
+    def translate_transformer_(self):
+        replace_ops = {"add": "+", "mul": "*", "sub": "-", "pow": "**", "inv": "1/"}
+
+        if self.regr.tree is None:
+            print('zero')
+            self.expr = sympy.sympify('0')
+            self.func = lambda X: np.zeros((len(X), 1))
+        elif self.regr.tree[0] is None: 
+            print('zero')
+            self.expr = sympy.sympify('0')
+            self.func = lambda X: np.zeros((len(X), 1))
+        else:
+            model_list = self.regr.tree[0][0]
+            if "relabed_predicted_tree" in model_list:
+                tree = model_list["relabed_predicted_tree"]
+            else:
+                tree = model_list["predicted_tree"]
+            self.func = self.regr.model.env.simplifier.tree_to_numexpr_fn(tree)
+                
+            model_str = tree.infix()
+            for op,replace_op in replace_ops.items():
+                model_str = model_str.replace(op,replace_op)
+            self.expr = sympy.parse_expr(model_str)
+        
+        for x in self.expr.free_symbols:
+            idx = int(str(x).split('_')[-1])
+            if self.positives[idx]:
+                self.expr = self.expr.subs(x, sympy.Symbol(str(x), positive = True))
+        
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+        self.positives = np.all(X > 0, axis = 0)
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.regr.fit(self.X, self.y)
+            self.translate_transformer_()
+
+    def predict(self, X):
+        assert hasattr(self, 'func')
+        pred = self.func(X)[:, 0]
+        return pred
+
+    def model(self):
+        assert hasattr(self, 'expr')
+        return self.expr

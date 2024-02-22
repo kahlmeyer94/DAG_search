@@ -1,4 +1,5 @@
 *.ipynb_checkpoints
 *_results.p
 *__pycache__
+*.pt
 results/

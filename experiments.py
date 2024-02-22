@@ -927,26 +927,39 @@ if __name__ == '__main__':
         overwrite = True
         rand_state = 0
         #problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
-        #problems = ['Nguyen', 'Strogatz', 'Univ', 'Feynman', 'Feynman_bonus']
-        problems = ['Feynman', 'Feynman_bonus']
+        problems = ['Nguyen', 'Strogatz', 'Univ', 'Feynman', 'Feynman_bonus']
+        #problems = ['Feynman', 'Feynman_bonus']
 
-        regs = {
-            #'linreg' : (sregs.LinReg(), True),
-            #'polyreg2' : (sregs.PolyReg(degree= 2), True),
-            #'polyreg3' : (sregs.PolyReg(degree= 3), True),
-            #'MLP' : (sregs.MLP(random_state = rand_state), False),
-            #'operon' : (sregs.Operon(random_state = rand_state), True),
-            #'gplearn' : (sregs.GPlearn(random_state = rand_state), True),
-            #'dsr' : (sregs.DSR(), True),
-            'DAGSearch' : (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True), 
-            'DAGSearchPoly' : (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True),
-            
-        }
+        regs = {}
+        if False:
+            # Linear Regression
+            regs['linreg'] = (sregs.LinReg(), True)
+
+            # Polynomial Regression
+            regs['polyreg2'] = (sregs.PolyReg(degree= 2), True)
+            regs['polyreg3'] = (sregs.PolyReg(degree= 3), True)
+
+            # Multi Layer Perceptron
+            regs['MLP'] = (sregs.MLP(random_state = rand_state), False)
+
+            # Operon
+            regs['operon'] = (sregs.Operon(random_state = rand_state), True)
+
+            # DSR
+            regs['dsr'] = (sregs.DSR(random_state = rand_state), True)
+
+            # gplearn
+            regs['gplearn'] = (sregs.GPlearn(random_state = rand_state), True)
+
+            # DAGSearch
+            regs['DAGSearch'] = (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True)
+
+        # transformer
+        regs['transformer'] = (sregs.Transformer(random_state = rand_state), True)
+
         # Elimination
-        symb_regr = regs['DAGSearch'][0]
+        symb_regr = dag_search.DAGRegressor(processes = 32, random_state = rand_state)
         regs['ElimDAGSearch'] = (simplifications.EliminationRegressor(symb_regr), True)
-        symb_regr = regs['DAGSearchPoly'][0]
-        regs['ElimDAGSearchPoly'] = (simplifications.EliminationRegressor(symb_regr), True)
         
         for ds_name in problems:
             for regressor_name in regs:
