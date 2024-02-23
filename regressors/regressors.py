@@ -566,20 +566,23 @@ class Transformer():
     def __init__(self, verbose:int = 0, random_state:int = 0, **params):
         
         sys.path.insert(0, os.path.join(os.getcwd(), 'regressors', 'symbolicregression'))
-
+        #from regressors.symbolicregression import symbolicregression, model
         from model import SymbolicTransformerRegressor
+        del sys.path[0]
         
         if random_state is not None:
             np.random.seed(random_state)
             torch.manual_seed(random_state)
 
         self.pt_model = self.load_transformer_()
-        #self.pt_model.max_generated_output_len = 20
-        #self.pt_model.beam_size = 100
+        self.pt_model.beam_type = 'search' # default 'sampling'
+        self.pt_model.max_generated_output_len = 100 # default 200
+        self.pt_model.beam_size = 10 # default 10
         self.regr = SymbolicTransformerRegressor(model=self.pt_model, rescale=True)
         self.X = None
         self.y = None
         self.positives = []
+
   
     def load_transformer_(self):
         model_path = os.path.join('regressors', 'symbolicregression', 'model.pt')
