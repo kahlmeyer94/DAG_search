@@ -576,8 +576,9 @@ class Transformer():
 
         self.pt_model = self.load_transformer_()
         self.pt_model.beam_type = 'search' # default 'sampling'
-        self.pt_model.max_generated_output_len = 100 # default 200
-        self.pt_model.beam_size = 10 # default 10
+        #self.pt_model.max_generated_output_len = 100 # default 200
+        self.pt_model.beam_size = 20 # default 10
+        self.pt_model.beam_early_stopping = False # default True
         self.regr = SymbolicTransformerRegressor(model=self.pt_model, rescale=True)
         self.X = None
         self.y = None
