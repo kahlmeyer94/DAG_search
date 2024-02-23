@@ -980,7 +980,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
             if score > best_score:
                 best_score = score
                 
-                expr = str(self.symb_regr.model())
+                expr = self.symb_regr.model()
                 for simpl in reversed(simpls[:problem_idx]):
                     expr = simpl.undo(expr)
                 self.expr = utils.round_floats(expr)
