@@ -966,9 +966,9 @@ if __name__ == '__main__':
         
         for ds_name in problems:
             for regressor_name in regs:
-                if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
-                    regressor, is_symb = regs[regressor_name]
-                    recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb, overwrite = overwrite)
+                #if overwrite or (not os.path.exists(f'results/{ds_name}/{regressor_name}_results.p')):
+                regressor, is_symb = regs[regressor_name]
+                recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb, overwrite = overwrite)
 
     # ESR recovery experiment [done]
     if False:
