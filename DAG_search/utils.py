@@ -302,7 +302,7 @@ def symb_eq(expr_est, expr_true) -> bool:
 
             if expr_ratio is None:
                 return False
-            if (expr_ratio != 0) and is_const(expr_ratio) and not (sympy.nan == expr_ratio or sympy.oo == expr_ratio):
+            if (expr_ratio != 0) and is_const(expr_ratio) and not (sympy.nan == expr_ratio or sympy.oo == expr_ratio or sympy.zoo == expr_ratio):
                 return True
             else:
                 return False
