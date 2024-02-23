@@ -86,12 +86,14 @@ def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb 
                 all_pred_test.append(pred)
                 all_y_test.append(y_test[:, idx])
 
-
-
                 if is_symb:
                     expr_est = regressor.model()
                     all_expr.append(str(expr_est))
                     rec = utils.symb_eq(expr_est, expr_true) 
+                    if not rec and np.all(y_part > 0):
+                        # works sometimes when we can get rid of sqrts
+                        rec = utils.symb_eq(expr_est**2, expr_true**2) 
+
                 else:
                     rec = False
                 all_rec.append(rec)
