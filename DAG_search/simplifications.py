@@ -546,7 +546,7 @@ class AddVar(Simplification):
         if 'error' in res and 'i' in res:
             self.error = res['error']
             self.idx = res['i']
-            self.c = np.round(res['const'], 3)
+            self.c = res['const']
             # new X = X without x_i
             new_X = np.column_stack([self.X[:, i] for i in range(self.X.shape[1]) if i != self.idx])
             # new y = y - c*x_i
@@ -983,7 +983,9 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
                 expr = self.symb_regr.model()
                 for simpl in reversed(simpls[:problem_idx]):
                     expr = simpl.undo(expr)
-                self.expr = utils.round_floats(expr)
+                self.expr = expr
+                #self.expr = utils.round_floats(expr)
+
                 for x in self.expr.free_symbols:
                     idx = int(str(x).split('_')[-1])
                     if self.positives[idx]:
