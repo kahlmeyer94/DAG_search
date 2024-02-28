@@ -99,7 +99,7 @@ class PolyReg():
 
 def approximate_poly(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    polydegrees = np.arange(1, 5, 1)
+    polydegrees = np.arange(1, 10, 1)
     rmses = []
     for degree in polydegrees:
         f_appr = PolyReg(degree = degree)
