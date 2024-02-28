@@ -929,15 +929,19 @@ if __name__ == '__main__':
 
     # Recovery experiment [done]
     if True:
-        overwrite = False
+        overwrite = True
         rand_state = 0
         #problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
         problems = ['Feynman', 'Feynman_bonus', 'Strogatz', 'Nguyen', 'Univ']
 
         regs = {}
 
-        # transformer
-        regs['transformer'] = (sregs.Transformer(random_state = rand_state), True)
+        # DAGSearch + Aug
+        #regs['DAGSearchPoly'] = (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True)
+
+        # Elimination + Aug
+        #symb_regr = dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state)
+        #regs['ElimDAGSearchPoly'] = (simplifications.EliminationRegressor(symb_regr), True)
 
         # DAGSearch
         regs['DAGSearch'] = (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True)
@@ -946,24 +950,30 @@ if __name__ == '__main__':
         symb_regr = dag_search.DAGRegressor(processes = 32, random_state = rand_state)
         regs['ElimDAGSearch'] = (simplifications.EliminationRegressor(symb_regr), True)
 
-        # Linear Regression
-        regs['linreg'] = (sregs.LinReg(), True)
+        if False:
+            # transformer
+            regs['transformer'] = (sregs.Transformer(random_state = rand_state), True)
 
-        # Polynomial Regression
-        regs['polyreg2'] = (sregs.PolyReg(degree= 2), True)
-        regs['polyreg3'] = (sregs.PolyReg(degree= 3), True)
+            
 
-        # Multi Layer Perceptron
-        regs['MLP'] = (sregs.MLP(random_state = rand_state), False)
+            # Linear Regression
+            regs['linreg'] = (sregs.LinReg(), True)
 
-        # Operon
-        regs['operon'] = (sregs.Operon(random_state = rand_state), True)
+            # Polynomial Regression
+            regs['polyreg2'] = (sregs.PolyReg(degree= 2), True)
+            regs['polyreg3'] = (sregs.PolyReg(degree= 3), True)
 
-        # DSR
-        regs['dsr'] = (sregs.DSR(random_state = rand_state), True)
+            # Multi Layer Perceptron
+            regs['MLP'] = (sregs.MLP(random_state = rand_state), False)
 
-        # gplearn
-        regs['gplearn'] = (sregs.GPlearn(random_state = rand_state), True)
+            # Operon
+            regs['operon'] = (sregs.Operon(random_state = rand_state), True)
+
+            # DSR
+            regs['dsr'] = (sregs.DSR(random_state = rand_state), True)
+
+            # gplearn
+            regs['gplearn'] = (sregs.GPlearn(random_state = rand_state), True)
 
         
         for ds_name in problems:
