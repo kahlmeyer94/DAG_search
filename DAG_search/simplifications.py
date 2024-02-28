@@ -420,7 +420,7 @@ def check_add_variable(X, y, f_appr, i, density = None, density_thresh = None):
         top_idxs = np.arange(len(X))
 
 
-    c = np.mean(df_dx[:, i])
+    c = np.round(np.mean(df_dx[:, i]))
 
     list_errs = abs(df_dx[:, i] - c)
     list_errs = list_errs[top_idxs]
@@ -727,13 +727,16 @@ def find_best_simplification(X:np.ndarray, y:np.ndarray, f_appr, density = None,
     
     for simpl in simpls:
         X_new, y_new = simpl.search()
+        error = simpl.error
+
         if verbose > 0:
-            print(f'{simpl}: {simpl.error}')
-        if simpl.error < best_error:
-            best_error = simpl.error
+            print(f'{simpl}: {error}')
+        if error < best_error:
+            best_error = error
             best_X = X_new
             best_y = y_new
             best_simpl = simpl
+    print(best_simpl)
     return {'simpl' : best_simpl, 'X' : best_X, 'y' : best_y}
 
 def find_simplifications(X:np.ndarray, y:np.ndarray, appr = approximate_NN, use_density:bool = False, verbose:int = 0):
