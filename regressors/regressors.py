@@ -7,7 +7,7 @@ import itertools
 import sys
 import requests
 
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.preprocessing import PolynomialFeatures
 
 import torch
@@ -109,10 +109,14 @@ class PolyReg():
     '''
     Regressor based on Polynomial Regression
     '''
-    def __init__(self, degree:int = 2, verbose:int = 0, random_state:int = 0, **params):
+    def __init__(self, degree:int = 2, alpha:float = 0.0, verbose:int = 0, random_state:int = 0, **params):
         self.degree = degree
         self.poly = PolynomialFeatures(degree=self.degree, include_bias=False)
-        self.regr = LinearRegression()
+        if alpha == 0.0:
+            self.regr = LinearRegression()
+        else:
+            self.regr = Ridge(alpha=alpha)
+
         self.X = None
         self.y = None
         
