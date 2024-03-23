@@ -869,7 +869,7 @@ def reduction_size(res, expr):
             res_true = simpl.check_func(X_current, y_current, f_current, simpl.idxs[0], simpl.idxs[1])
         else:
             res_true = simpl.check_func(X_current, y_current, f_current, simpl.idx)
-        # adjust true function ccording to taken simplification
+        # adjust true function according to taken simplification
         try:
             if 'DivSym' in str(type(simpl)):
                 expr = f_current.expr
@@ -940,6 +940,10 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         self.exec_func = exec_func
         self.approx = approx
 
+        # TODO: remove
+        self.simpl_expr = None
+        self.simpls = []
+
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
         Fits a model on given regression data.
@@ -962,6 +966,9 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         Xs = simpl_res['Xs']
         ys = simpl_res['ys']
         simpls = simpl_res['simpls']
+
+        self.simpls = [x for x in simpls] # TODO: remove
+
 
         if verbose > 0:
             print(f'Created {len(Xs)} regression problems.')
@@ -988,6 +995,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
                     expr = simpl.undo(expr)
                 self.expr = expr
                 #self.expr = utils.round_floats(expr)
+                self.simpl_expr = self.symb_regr.model() # TODO: remove
 
                 for x in self.expr.free_symbols:
                     idx = int(str(x).split('_')[-1])

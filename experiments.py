@@ -16,6 +16,96 @@ from DAG_search import simplifications
 from regressors import regressors as sregs
 
 
+def debug_experiment():
+    ds_name = 'Feynman'
+    problem_name = 'II.21.32'
+    test_size = 0.2
+
+    symb_regr = dag_search.DAGRegressor(processes = 32, random_state = 0)
+    regressor = simplifications.EliminationRegressor(symb_regr)
+
+    load_path = f'datasets/{ds_name}/tasks.p'
+    save_path = f'results/debug_results.p'
+
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    
+    results = {}
+    with open(load_path, 'rb') as handle:
+        task_dict = pickle.load(handle)
+    assert problem_name in task_dict
+
+    problem = problem_name
+    X, y, exprs_true = task_dict[problem]['X'], task_dict[problem]['y'], task_dict[problem]['expr']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+
+    all_rec = []
+    all_pred_train = []
+    all_pred_test = []
+    all_y_train = []
+    all_y_test = []
+    all_expr = []
+    all_times = []
+    all_simpls = []
+    all_simpls_exprs = []
+
+
+    for idx in range(y.shape[1]):
+        expr_true = exprs_true[idx]
+        y_part = y_train[:, idx]
+
+        s_time = timer()
+        regressor.fit(X_train, y_part, verbose = 2)
+        e_time = timer()
+        all_times.append(e_time - s_time)
+
+        pred = regressor.predict(X_train)
+        all_pred_train.append(pred)
+        all_y_train.append(y_part)
+
+        pred = regressor.predict(X_test)
+        all_pred_test.append(pred)
+        all_y_test.append(y_test[:, idx])
+
+
+        expr_est = regressor.model()
+        all_expr.append(str(expr_est))
+
+        # New
+        all_simpls_exprs.append(str(regressor.simpl_expr))
+        all_simpls.append(regressor.simpls)
+
+        rec = utils.symb_eq(expr_est, expr_true) 
+        if not rec and np.all(y_part > 0):
+            # works sometimes when we can get rid of sqrts
+            rec = utils.symb_eq(expr_est**2, expr_true**2) 
+        else:
+            rec = False
+        all_rec.append(rec)
+
+        print(f'Recovery: {rec}')
+        for target, pred in zip(all_y_train, all_pred_train):
+            mse = np.mean((target - pred)**2)
+            print(f'MSE: {mse}')
+
+
+    results[problem] = {
+        'recovery' : all_rec,
+        'exprs' : all_expr,
+        'y_train' : all_y_train,
+        'y_test' : all_y_test,
+        'pred_train' : all_pred_train,
+        'pred_test' : all_pred_test,
+        'times' : all_times,
+        'simpls' : all_simpls,
+        'simpl_expr' : all_simpls_exprs
+    }
+    with open(save_path, 'wb') as handle:
+        pickle.dump(results, handle)
+
+
+
+
 def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2, overwrite:bool = False):
     '''
     Simple Experiment to estimate the Recovery rate of a Regressor.
@@ -874,35 +964,12 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
                     pickle.dump(results_dict, handle) 
 
 
-def niklas_experiment():
-    save_path = 'datasets/Tensor/results.p'
-
-    if os.path.exists(save_path):
-        with open(save_path, 'rb') as handle:
-            results_dict = pickle.load(handle)
-    else:
-        results_dict = {}
-    #for mode in ['transformed_weighted', 'weighted_2']:
-    for mode in ['weighted_2']:
-        load_path = f'datasets/Tensor/features_mm_{mode}.npy'
-        X = np.load(load_path)
-        load_path = f'datasets/Tensor/runtimes_mm_{mode}.npy'
-        y = np.load(load_path)
-
-        results_dict[mode] = {}
-        est = dag_search.DAGRegressor(processes = 16, random_state = 0, n_calc_nodes = 5, max_orders = int(1e7), max_time = 5*3600)
-        est.fit(X, y, verbose = 2)
-        results_dict[mode] = {
-            'expr' : est.model(),
-            'pred' : est.predict(X)
-        }
-        with open(save_path, 'wb') as handle:
-            pickle.dump(results_dict, handle) 
-
 
 if __name__ == '__main__':
     
-
+    # Debug Experiment
+    if True:
+        debug_experiment()
 
 
     # Runtime Experiment [done]
@@ -928,7 +995,7 @@ if __name__ == '__main__':
         timing_experiment('Feynman')
 
     # Recovery experiment [done]
-    if True:
+    if False:
         overwrite = True
         rand_state = 0
         #problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
@@ -996,11 +1063,6 @@ if __name__ == '__main__':
                 recovery_experiment(ds_name = ds_name, regressor = regressor, regressor_name = regressor_name, is_symb = is_symb)
 
     # OLD - not used in the paper
-
-    # Niklas Experiment
-    if False:
-        niklas_experiment()
-
 
     # Covariance experiment
     if False:
