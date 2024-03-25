@@ -476,21 +476,20 @@ class MultVar(Simplification):
         return new_X, new_y
     
     def undo(self, expr):
-        if self.expr is None:
-            assert (self.error is not None) and (self.idx is not None)
-            # 1. translate indices of expression to make space for x_idx
-            transl_dict = {}
-            for i in range(self.idx):
-                transl_dict[f'x_{i}'] = f'z_{i}'
-            for i in range(self.idx, self.X.shape[1]):
-                transl_dict[f'x_{i}'] = f'z_{i+1}'
-            expr_str = str(expr)
-            for x in transl_dict:
-                expr_str = expr_str.replace(x, transl_dict[x])
-            expr_str = expr_str.replace('z_', 'x_')
-            # 2. add factor x_idx
-            expr_str = f'x_{self.idx}*({expr_str})'
-            self.expr = sympy.sympify(expr_str)
+        assert (self.error is not None) and (self.idx is not None)
+        # 1. translate indices of expression to make space for x_idx
+        transl_dict = {}
+        for i in range(self.idx):
+            transl_dict[f'x_{i}'] = f'z_{i}'
+        for i in range(self.idx, self.X.shape[1]):
+            transl_dict[f'x_{i}'] = f'z_{i+1}'
+        expr_str = str(expr)
+        for x in transl_dict:
+            expr_str = expr_str.replace(x, transl_dict[x])
+        expr_str = expr_str.replace('z_', 'x_')
+        # 2. add factor x_idx
+        expr_str = f'x_{self.idx}*({expr_str})'
+        self.expr = sympy.sympify(expr_str)
         return self.expr
 
 class DivVar(Simplification):
@@ -516,21 +515,20 @@ class DivVar(Simplification):
         return new_X, new_y
     
     def undo(self, expr):
-        if self.expr is None:
-            assert (self.error is not None) and (self.idx is not None)
-            # 1. translate indices of expression to make space for x_idx
-            transl_dict = {}
-            for i in range(self.idx):
-                transl_dict[f'x_{i}'] = f'z_{i}'
-            for i in range(self.idx, self.X.shape[1]):
-                transl_dict[f'x_{i}'] = f'z_{i+1}'
-            expr_str = str(expr)
-            for x in transl_dict:
-                expr_str = expr_str.replace(x, transl_dict[x])
-            expr_str = expr_str.replace('z_', 'x_')
-            # 2. add divide by x_idx
-            expr_str = f'({expr_str})/x_{self.idx}'
-            self.expr = sympy.sympify(expr_str)
+        assert (self.error is not None) and (self.idx is not None)
+        # 1. translate indices of expression to make space for x_idx
+        transl_dict = {}
+        for i in range(self.idx):
+            transl_dict[f'x_{i}'] = f'z_{i}'
+        for i in range(self.idx, self.X.shape[1]):
+            transl_dict[f'x_{i}'] = f'z_{i+1}'
+        expr_str = str(expr)
+        for x in transl_dict:
+            expr_str = expr_str.replace(x, transl_dict[x])
+        expr_str = expr_str.replace('z_', 'x_')
+        # 2. add divide by x_idx
+        expr_str = f'({expr_str})/x_{self.idx}'
+        self.expr = sympy.sympify(expr_str)
         return self.expr
 
 class AddVar(Simplification):
@@ -557,21 +555,20 @@ class AddVar(Simplification):
         return new_X, new_y
     
     def undo(self, expr):
-        if self.expr is None:
-            assert (self.error is not None) and (self.idx is not None)
-            # 1. translate indices of expression to make space for x_idx
-            transl_dict = {}
-            for i in range(self.idx):
-                transl_dict[f'x_{i}'] = f'z_{i}'
-            for i in range(self.idx, self.X.shape[1]):
-                transl_dict[f'x_{i}'] = f'z_{i+1}'
-            expr_str = str(expr)
-            for x in transl_dict:
-                expr_str = expr_str.replace(x, transl_dict[x])
-            expr_str = expr_str.replace('z_', 'x_')
-            # 2. add summand c*x_idx
-            expr_str = f'({self.c}*x_{self.idx}) + ({expr_str})'
-            self.expr = sympy.sympify(expr_str)
+        assert (self.error is not None) and (self.idx is not None)
+        # 1. translate indices of expression to make space for x_idx
+        transl_dict = {}
+        for i in range(self.idx):
+            transl_dict[f'x_{i}'] = f'z_{i}'
+        for i in range(self.idx, self.X.shape[1]):
+            transl_dict[f'x_{i}'] = f'z_{i+1}'
+        expr_str = str(expr)
+        for x in transl_dict:
+            expr_str = expr_str.replace(x, transl_dict[x])
+        expr_str = expr_str.replace('z_', 'x_')
+        # 2. add summand c*x_idx
+        expr_str = f'({self.c}*x_{self.idx}) + ({expr_str})'
+        self.expr = sympy.sympify(expr_str)
         return self.expr
 
 class MultSym(Simplification):
@@ -597,17 +594,16 @@ class MultSym(Simplification):
         return new_X, new_y
     
     def undo(self, expr):
-        if self.expr is None:
-            assert (self.error is not None) and (self.idxs is not None)
-            remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
-            transl_dict = {'x_0' : f'(z_{self.idxs[0]}*z_{self.idxs[1]})'}
-            for i in range(len(remain_idxs)):
-                transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
-            expr_str = str(expr)
-            for x in transl_dict:
-                expr_str = expr_str.replace(x, transl_dict[x])
-            expr_str = expr_str.replace('z_', 'x_')
-            self.expr = sympy.sympify(expr_str)
+        assert (self.error is not None) and (self.idxs is not None)
+        remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
+        transl_dict = {'x_0' : f'(z_{self.idxs[0]}*z_{self.idxs[1]})'}
+        for i in range(len(remain_idxs)):
+            transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
+        expr_str = str(expr)
+        for x in transl_dict:
+            expr_str = expr_str.replace(x, transl_dict[x])
+        expr_str = expr_str.replace('z_', 'x_')
+        self.expr = sympy.sympify(expr_str)
         return self.expr
 
 class DivSym(Simplification):
@@ -632,17 +628,16 @@ class DivSym(Simplification):
         return new_X, new_y
     
     def undo(self, expr):
-        if self.expr is None:
-            assert (self.error is not None) and (self.idxs is not None)
-            remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
-            transl_dict = {'x_0' : f'(z_{self.idxs[0]}/z_{self.idxs[1]})'}
-            for i in range(len(remain_idxs)):
-                transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
-            expr_str = str(expr)
-            for x in transl_dict:
-                expr_str = expr_str.replace(x, transl_dict[x])
-            expr_str = expr_str.replace('z_', 'x_')
-            self.expr = sympy.sympify(expr_str)
+        assert (self.error is not None) and (self.idxs is not None)
+        remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
+        transl_dict = {'x_0' : f'(z_{self.idxs[0]}/z_{self.idxs[1]})'}
+        for i in range(len(remain_idxs)):
+            transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
+        expr_str = str(expr)
+        for x in transl_dict:
+            expr_str = expr_str.replace(x, transl_dict[x])
+        expr_str = expr_str.replace('z_', 'x_')
+        self.expr = sympy.sympify(expr_str)
         return self.expr
 
 class AddSym(Simplification):
@@ -667,17 +662,16 @@ class AddSym(Simplification):
         return new_X, new_y
     
     def undo(self, expr):
-        if self.expr is None:
-            assert (self.error is not None) and (self.idxs is not None)
-            remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
-            transl_dict = {'x_0' : f'(z_{self.idxs[0]}+z_{self.idxs[1]})'}
-            for i in range(len(remain_idxs)):
-                transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
-            expr_str = str(expr)
-            for x in transl_dict:
-                expr_str = expr_str.replace(x, transl_dict[x])
-            expr_str = expr_str.replace('z_', 'x_')
-            self.expr = sympy.sympify(expr_str)
+        assert (self.error is not None) and (self.idxs is not None)
+        remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
+        transl_dict = {'x_0' : f'(z_{self.idxs[0]}+z_{self.idxs[1]})'}
+        for i in range(len(remain_idxs)):
+            transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
+        expr_str = str(expr)
+        for x in transl_dict:
+            expr_str = expr_str.replace(x, transl_dict[x])
+        expr_str = expr_str.replace('z_', 'x_')
+        self.expr = sympy.sympify(expr_str)
         return self.expr
 
 class SubSym(Simplification):
@@ -702,17 +696,16 @@ class SubSym(Simplification):
         return new_X, new_y
     
     def undo(self, expr):
-        if self.expr is None:
-            assert (self.error is not None) and (self.idxs is not None)
-            remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
-            transl_dict = {'x_0' : f'(z_{self.idxs[0]}-z_{self.idxs[1]})'}
-            for i in range(len(remain_idxs)):
-                transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
-            expr_str = str(expr)
-            for x in transl_dict:
-                expr_str = expr_str.replace(x, transl_dict[x])
-            expr_str = expr_str.replace('z_', 'x_')
-            self.expr = sympy.sympify(expr_str)
+        assert (self.error is not None) and (self.idxs is not None)
+        remain_idxs = [i for i in range(self.X.shape[1]) if i not in self.idxs]
+        transl_dict = {'x_0' : f'(z_{self.idxs[0]}-z_{self.idxs[1]})'}
+        for i in range(len(remain_idxs)):
+            transl_dict[f'x_{i + 1}'] = f'z_{remain_idxs[i]}'
+        expr_str = str(expr)
+        for x in transl_dict:
+            expr_str = expr_str.replace(x, transl_dict[x])
+        expr_str = expr_str.replace('z_', 'x_')
+        self.expr = sympy.sympify(expr_str)
         return self.expr
 
 def find_best_simplification(X:np.ndarray, y:np.ndarray, f_appr, density = None, density_thresh = None, verbose:int = 0):
