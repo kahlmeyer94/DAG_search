@@ -21,7 +21,7 @@ def debug_experiment():
     problem_name = 'II.21.32'
     test_size = 0.2
 
-    symb_regr = dag_search.DAGRegressor(processes = 32, random_state = 0)
+    symb_regr = dag_search.DAGRegressor(processes = 32, random_state = 0, max_orders = int(2e6))
     regressor = simplifications.EliminationRegressor(symb_regr)
 
     load_path = f'datasets/{ds_name}/tasks.p'
@@ -75,12 +75,13 @@ def debug_experiment():
         all_simpls_exprs.append(str(regressor.simpl_expr))
         all_simpls.append(regressor.simpls)
 
+        
         rec = utils.symb_eq(expr_est, expr_true) 
+        print(expr_est, rec)
+
         if not rec and np.all(y_part > 0):
             # works sometimes when we can get rid of sqrts
             rec = utils.symb_eq(expr_est**2, expr_true**2) 
-        else:
-            rec = False
         all_rec.append(rec)
 
         print(f'Recovery: {rec}')
@@ -102,8 +103,6 @@ def debug_experiment():
     }
     with open(save_path, 'wb') as handle:
         pickle.dump(results, handle)
-
-
 
 
 def recovery_experiment(ds_name : str, regressor, regressor_name : str, is_symb : bool, test_size : float = 0.2, overwrite:bool = False):
@@ -968,7 +967,7 @@ def covariance_experiment(ds_name : str, max_tries : int = 10, n_graphs : int = 
 if __name__ == '__main__':
     
     # Debug Experiment
-    if True:
+    if False:
         debug_experiment()
 
 
@@ -994,8 +993,8 @@ if __name__ == '__main__':
         timing_experiment('Univ')
         timing_experiment('Feynman')
 
-    # Recovery experiment [done]
-    if False:
+    # Recovery experiment [running]
+    if True:
         overwrite = True
         rand_state = 0
         #problems = [n for n in os.listdir('datasets') if 'ipynb' not in n]
@@ -1003,19 +1002,19 @@ if __name__ == '__main__':
 
         regs = {}
 
-        # DAGSearch + Aug
-        #regs['DAGSearchPoly'] = (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True)
-
-        # Elimination + Aug
-        #symb_regr = dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state)
-        #regs['ElimDAGSearchPoly'] = (simplifications.EliminationRegressor(symb_regr), True)
-
         # DAGSearch
         regs['DAGSearch'] = (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True)
 
         # Elimination
         symb_regr = dag_search.DAGRegressor(processes = 32, random_state = rand_state)
         regs['ElimDAGSearch'] = (simplifications.EliminationRegressor(symb_regr), True)
+
+        # DAGSearch + Aug
+        regs['DAGSearchPoly'] = (dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state), True)
+
+        # Elimination + Aug
+        symb_regr = dag_search.DAGRegressorPoly(processes = 32, random_state = rand_state)
+        regs['ElimDAGSearchPoly'] = (simplifications.EliminationRegressor(symb_regr), True)
 
         if False:
             # transformer
