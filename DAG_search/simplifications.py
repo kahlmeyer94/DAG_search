@@ -953,7 +953,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         if verbose > 0:
             print('Recursively searching for Eliminations')
 
-        simpl_res = find_simplifications(X, y, appr = self.approx, verbose = verbose, use_density = use_density)
+        simpl_res = find_simplifications(X, y, appr = self.approx, verbose = verbose, use_density = self.use_density)
         Xs = simpl_res['Xs']
         ys = simpl_res['ys']
         simpls = simpl_res['simpls']
