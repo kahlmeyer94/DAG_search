@@ -921,7 +921,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
     Sklearn interface.
     '''
 
-    def __init__(self, symb_regr, positives:list = None, expr = None, exec_func = None, approx = approximate_poly, **kwargs):
+    def __init__(self, symb_regr, positives:list = None, expr = None, exec_func = None, approx = approximate_poly, use_density:bool = False, **kwargs):
         '''
         @Params:
             symb_regr... symbolic regressor (has .fit(X, y), .predict(X), .model() function)
@@ -932,10 +932,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         self.expr = expr
         self.exec_func = exec_func
         self.approx = approx
-
-        # TODO: remove
-        self.simpl_expr = None
-        self.simpls = []
+        self.use_density = use_density
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
@@ -955,13 +952,10 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         if verbose > 0:
             print('Recursively searching for Eliminations')
 
-        simpl_res = find_simplifications(X, y, appr = self.approx, verbose = verbose)
+        simpl_res = find_simplifications(X, y, appr = self.approx, verbose = verbose, use_density = use_density)
         Xs = simpl_res['Xs']
         ys = simpl_res['ys']
         simpls = simpl_res['simpls']
-
-        self.simpls = [x for x in simpls] # TODO: remove
-
 
         if verbose > 0:
             print(f'Created {len(Xs)} regression problems.')
@@ -988,7 +982,6 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
                     expr = simpl.undo(expr)
                 self.expr = expr
                 #self.expr = utils.round_floats(expr)
-                self.simpl_expr = self.symb_regr.model() # TODO: remove
 
                 for x in self.expr.free_symbols:
                     idx = int(str(x).split('_')[-1])
