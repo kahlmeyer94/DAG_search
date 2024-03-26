@@ -729,10 +729,11 @@ def find_best_simplification(X:np.ndarray, y:np.ndarray, f_appr, density = None,
             best_X = X_new
             best_y = y_new
             best_simpl = simpl
-    print(best_simpl)
+    if verbose > 0:
+        print(f'Chosen: {best_simpl}')
     return {'simpl' : best_simpl, 'X' : best_X, 'y' : best_y}
 
-def find_simplifications(X:np.ndarray, y:np.ndarray, appr = approximate_NN, use_density:bool = False, verbose:int = 0):
+def find_simplifications(X:np.ndarray, y:np.ndarray, appr = approximate_poly, use_density:bool = False, verbose:int = 0):
 
     # Find best eliminations
     Xs = [X.copy()]
