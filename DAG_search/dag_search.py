@@ -94,9 +94,9 @@ class MSE_loss_fkt(DAG_Loss_fkt):
             invalid = ~np.isfinite(losses)
             
         # consider not using inf, since optimizers struggle with this
-        losses[invalid] = 1000
-        losses[losses > 1000] = 1000
-        losses[losses < 0] = 1000
+        losses[invalid] = np.inf
+        #losses[losses > 1000] = 1000
+        losses[losses < 0] = np.inf
 
         if not vec:
             return losses[0]
@@ -147,9 +147,9 @@ class R2_loss_fkt(DAG_Loss_fkt):
             invalid = ~np.isfinite(losses)
             
         # consider not using inf, since optimizers struggle with this
-        losses[invalid] = 1000
-        losses[losses > 1000] = 1000
-        losses[losses < 0] = 1000
+        losses[invalid] = np.inf
+        #losses[losses > 1000] = 1000
+        losses[losses < 0] = np.inf
 
         if not vec:
             return losses[0]
