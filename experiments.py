@@ -1003,7 +1003,7 @@ if __name__ == '__main__':
         regs = {}
 
         # DAGSearch
-        regs['DAGSearch'] = (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True)
+        #regs['DAGSearch'] = (dag_search.DAGRegressor(processes = 32, random_state = rand_state), True)
 
         # Elimination
         symb_regr = dag_search.DAGRegressor(processes = 32, random_state = rand_state)
