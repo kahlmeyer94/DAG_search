@@ -1,8 +1,0 @@
-Metadata-Version: 2.1
-Name: dso
-Version: 1.0.dev0
-Summary: Deep symbolic optimization.
-Author: LLNL
-Provides-Extra: control
-Provides-Extra: regression
-Provides-Extra: all
