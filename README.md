@@ -7,7 +7,9 @@ Systematically searching the space of small directed, acyclic graphs (DAGs).
 
 
 ## Installation
+**Option 1**
 
+Clone the repository and then follow
 ```
 conda create --name testenv python=3.9.12
 conda activate testenv
@@ -17,6 +19,13 @@ pip install -r requirements.txt
 
 conda deactivate
 conda remove -n testenv --all
+```
+
+**Option 2**
+
+Copy the install script `install.sh` and then run
+```
+bash install.sh
 ```
 
 ## Usage
