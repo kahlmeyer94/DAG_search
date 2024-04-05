@@ -24,18 +24,18 @@ from sklearn.model_selection import GridSearchCV, LeaveOneOut, KFold
 
 def get_density_function(X):
     # select bandwith using crossvalidation
-    bandwidths = 10 ** np.linspace(-2, 1, 10) # 0.01 to 10 # TODO: 50
+    bandwidths = 10 ** np.linspace(-2, 1, 5) # 0.01 to 10 # TODO: 50
     grid = GridSearchCV(KernelDensity(kernel='gaussian'),
                         {'bandwidth': bandwidths},
-                        cv=KFold(n_splits = 10))
+                        cv=KFold(n_splits = 5))
     grid.fit(X)
 
     # estimate density
     kde = KernelDensity(kernel='gaussian', bandwidth = grid.best_params_['bandwidth']).fit(X)
     logprobs = kde.score_samples(X)
-    #k = int(0.99*len(logprobs))
-    #thresh = np.sort(logprobs)[k]
-    thresh = np.median(logprobs)
+    k = int(0.05*len(logprobs))
+    thresh = np.sort(logprobs)[k]
+    #thresh = np.median(logprobs)
     return kde, thresh
 
 ####################
@@ -81,7 +81,8 @@ class PolyReg():
             mu_y = 0
             std_y = 1
             X_poly = self.poly.fit_transform(self.X)
-        self.regr.fit(X_poly, (self.y-mu_y)/std_y)
+        y_tmp = (self.y-mu_y)/std_y
+        self.regr.fit(X_poly, y_tmp)
 
     def predict(self, X):
         assert self.X is not None
@@ -101,7 +102,7 @@ class PolyReg():
 
 def approximate_poly(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    polydegrees = np.arange(1, 5, 1) # TODO: back to 10
+    polydegrees = np.arange(1, 7, 1)
     rmses = []
     for degree in polydegrees:
         f_appr = PolyReg(degree = degree)
@@ -113,6 +114,44 @@ def approximate_poly(X, y):
             break
     min_idx = np.argmin(rmses)
     f_appr = PolyReg(degree = polydegrees[min_idx])
+    f_appr.fit(X, y)
+    return f_appr
+
+
+
+from scipy.interpolate import RBFInterpolator
+
+class InterpReg():
+    '''
+    Regressor based on RBF Interpolation
+    '''
+    def __init__(self):
+        self.interp = None
+        self.X = None
+        self.y = None
+        
+
+
+    def fit(self, X, y):
+        assert len(y.shape) == 1
+        self.y = y.copy()
+
+        
+
+        if len(X.shape) == 1:
+            self.X = X.reshape(-1, 1).copy()
+        else:
+            self.X = X.copy()
+
+        self.interp = RBFInterpolator(self.X, self.y, neighbors = 1000)
+
+    def predict(self, X):
+        assert self.interp is not None
+        pred = self.interp(X)
+        return pred
+
+def approximate_interp(X, y):
+    f_appr = InterpReg()
     f_appr.fit(X, y)
     return f_appr
 
@@ -137,7 +176,7 @@ class Net(nn.Module):
         '''
 
         super(Net, self).__init__()
-        h_dim = 128
+        h_dim = 64
         n_layers = 6
         self.layers = nn.ModuleList()
         self.layers.append(nn.BatchNorm1d(inp_dim))
@@ -235,13 +274,110 @@ def approximate_NN(X, y):
 # https://github.com/SJ001/AI-Feynman/blob/master/aifeynman/S_symmetry.py
 ####################
 
-def find_best_symmetry(X, y, f_appr, check_func, density = None, density_thresh = None):
+
+def get_a_values(X:np.ndarray, i:int, j:int, mode:str) -> np.ndarray:
+    '''
+    Estimates symmetry constants based on minimal distance to measurements.
+    
+    @Params:
+        X... data (n_samples x n_dims)
+        i... index of symmetry
+        j... index of symmetry
+        mode... kind of symmetry, has to be one of 'mult', 'div', 'add' or 'sub'
+        
+    @Returns:
+        constants for symmetry for each datapoint
+    '''
+    
+    
+    
+    assert mode in ['mult', 'div', 'add', 'sub'], f'Mode {mode} not supported!'
+    
+    a_values = []
+    for p in X:
+        if mode == 'mult':
+            # x_i*a, x_j/a
+            
+            # x = x_i*a -> a = x/x_i
+            a1 = X[:, i]/p[i]
+            mask1 = np.ones(X.shape)*p
+            mask1[:, i] = p[i]*a1 # = X[:, i]
+            mask1[:, j] = X[:, j]/a1
+
+            # x = x_j/a -> a = x_j/x
+            a2 = p[j]/X[:, j]
+            mask2 = np.ones(X.shape)*p
+            mask2[:, i] = X[:, i]*a2
+            mask2[:, j] = p[j]/a2 # = X[:, j]
+            
+        elif mode == 'div':
+            # x_i*a, x_j*a
+            
+            # x = x_i*a -> a = x/x_i
+            a1 = X[:, i]/p[i]
+            mask1 = np.ones(X.shape)*p
+            mask1[:, i] = p[i]*a1 # = X[:, i]
+            mask1[:, j] = X[:, j]*a1
+
+            # x = x_j*a -> a = x/x_j
+            a2 = X[:, j]/p[j]
+            mask2 = np.ones(X.shape)*p
+            mask2[:, i] = X[:, i]*a2
+            mask2[:, j] = p[j]*a2 # = X[:, j]
+            
+        elif mode == 'add':
+            # x_i + a, x_j - a
+            
+            # x = x_i + a -> a = x - x_i
+            a1 = X[:, i] - p[i]
+            mask1 = np.ones(X.shape)*p
+            mask1[:, i] = p[i] + a1 # = X[:, i]
+            mask1[:, j] = X[:, j] - a1
+
+            # x = x_j - a -> a = x_j - x
+            a2 = p[j] - X[:, j]
+            mask2 = np.ones(X.shape)*p
+            mask2[:, i] = X[:, i] + a2
+            mask2[:, j] = p[j] - a2 # = X[:, j]
+            
+        elif mode == 'sub':
+            # x_i + a, x_j + a
+            
+            # x = x_i + a -> a = x - x_i
+            a1 = X[:, i] - p[i]
+            mask1 = np.ones(X.shape)*p
+            mask1[:, i] = p[i] + a1 # = X[:, i]
+            mask1[:, j] = X[:, j] + a1
+
+            # x = x_j + a -> a = x - x_j
+            a2 =  X[:, j] - p[j]
+            mask2 = np.ones(X.shape)*p
+            mask2[:, i] = X[:, i] + a2
+            mask2[:, j] = p[j] + a2 # = X[:, j]
+
+
+        dists1 = np.sum(np.abs(X - mask1), axis = 1)
+        dists2 = np.sum(np.abs(X - mask2), axis = 1)
+
+        i1 = np.argsort(dists1)[1]
+        i2 = np.argsort(dists2)[1]
+
+        if dists1[i1] < dists2[i2]:
+            idx = i1
+            a_values.append(a1[i1])
+        else:
+            idx = i2
+            a_values.append(a2[i2])
+    a_values = np.array(a_values)
+    return a_values
+
+def find_best_symmetry(X, y, f_appr, check_func):
     min_error = 1000
     best_ret = {'i' : 0, 'j' : 1, }
     for i in range(X.shape[1]):
         for j in range(X.shape[1]):
             if i != j:
-                ret = check_func(X, y, f_appr, i, j, density, density_thresh)
+                ret = check_func(X, y, f_appr, i, j)
                 if(ret['error'] is not None) and (ret['error'] < min_error):
                     min_error = ret['error']
                     best_ret = ret
@@ -252,12 +388,13 @@ def find_best_symmetry(X, y, f_appr, check_func, density = None, density_thresh 
     #    print(e)
     #    return {}
 
-def check_translational_symmetry_multiply(X, y, f_appr, i, j, density = None, density_thresh = None):
+def check_translational_symmetry_multiply(X, y, f_appr, i, j):
     # f(x, y) = f(x*y)?
     # make the shift x1->x1*a, x2->x2/a
 
     min_error = 1000
     a = 1.1
+    #a = get_a_values(X, i, j, 'mult')
     min_amount = math.ceil(0.05*len(X))
 
     fact_translate = X.copy()
@@ -265,13 +402,6 @@ def check_translational_symmetry_multiply(X, y, f_appr, i, j, density = None, de
     fact_translate[:,j] = fact_translate[:,j] / a
     list_errs = abs(y - f_appr.predict(fact_translate))
 
-    if (density is not None) and (density_thresh is not None):
-        logprobs = density.score_samples(fact_translate)
-        idxs, = np.where(logprobs > density_thresh)
-        if len(idxs) == 0:
-            idxs = np.arange(len(X))
-        list_errs = list_errs[idxs]
-
     if len(list_errs) > min_amount:
         error = np.median(list_errs)
     else:
@@ -279,12 +409,13 @@ def check_translational_symmetry_multiply(X, y, f_appr, i, j, density = None, de
 
     return {'error' : error}
 
-def check_translational_symmetry_divide(X, y, f_appr, i, j, density = None, density_thresh = None):
+def check_translational_symmetry_divide(X, y, f_appr, i, j):
     # f(x, y) = f(x/y)?
     # make the shift x1->x1*a, x2->x2*a
 
     min_error = 1000
     a = 1.1
+    #a = get_a_values(X, i, j, 'div')
     min_amount = math.ceil(0.05*len(X))
 
     fact_translate = X.copy()
@@ -292,12 +423,6 @@ def check_translational_symmetry_divide(X, y, f_appr, i, j, density = None, dens
     fact_translate[:,j] = fact_translate[:,j] * a
     list_errs = abs(y - f_appr.predict(fact_translate))
 
-    if (density is not None) and (density_thresh is not None):
-        logprobs = density.score_samples(fact_translate)
-        idxs, = np.where(logprobs > density_thresh)
-        if len(idxs) == 0:
-            idxs = np.arange(len(X))
-        list_errs = list_errs[idxs]
 
     if len(list_errs) > min_amount:
         error = np.median(list_errs)
@@ -306,12 +431,15 @@ def check_translational_symmetry_divide(X, y, f_appr, i, j, density = None, dens
 
     return {'error' : error}
 
-def check_translational_symmetry_plus(X, y, f_appr, i, j, density = None, density_thresh = None):
+def check_translational_symmetry_plus(X, y, f_appr, i, j):
     # f(x, y) = f(x+y)?
     # make the shift x1->x1+a, x2->x2-a
 
     min_error = 1000
+    
     a = 0.5*min(np.std(X[:,i]), np.std(X[:,j]))
+    #a = get_a_values(X, i, j, 'add')
+
     min_amount = math.ceil(0.05*len(X))
 
     fact_translate = X.copy()
@@ -319,38 +447,25 @@ def check_translational_symmetry_plus(X, y, f_appr, i, j, density = None, densit
     fact_translate[:,j] = fact_translate[:,j] - a
     list_errs = abs(y - f_appr.predict(fact_translate))
 
-    if (density is not None) and (density_thresh is not None):
-        logprobs = density.score_samples(fact_translate)
-        idxs, = np.where(logprobs > density_thresh)
-        if len(idxs) == 0:
-            idxs = np.arange(len(X))
-        list_errs = list_errs[idxs]
-
     if len(list_errs) > min_amount:
         error = np.median(list_errs)
     else:
         error = 2*min_error
     return {'error' : error}
         
-def check_translational_symmetry_minus(X, y, f_appr, i, j, density = None, density_thresh = None):
+def check_translational_symmetry_minus(X, y, f_appr, i, j):
     # f(x, y) = f(x-y)?
     # make the shift x1->x1+a, x2->x2+a
 
     min_error = 1000
     a = 0.5*min(np.std(X[:,i]), np.std(X[:,j]))
+    #a = get_a_values(X, i, j, 'sub')
     min_amount = math.ceil(0.05*len(X))
 
     fact_translate = X.copy()
     fact_translate[:,i] = fact_translate[:,i] + a
     fact_translate[:,j] = fact_translate[:,j] + a
     list_errs = abs(y - f_appr.predict(fact_translate))
-
-    if (density is not None) and (density_thresh is not None):
-        logprobs = density.score_samples(fact_translate)
-        idxs, = np.where(logprobs > density_thresh)
-        if len(idxs) == 0:
-            idxs = np.arange(len(X))
-        list_errs = list_errs[idxs]
 
     if len(list_errs) > min_amount:
         error = np.median(list_errs)
@@ -362,12 +477,12 @@ def check_translational_symmetry_minus(X, y, f_appr, i, j, density = None, densi
 ####################
 # Top-down checks
 ####################
-def find_best_variable(X, y, f_appr, check_func, density = None, density_thresh = None):
+def find_best_variable(X, y, f_appr, check_func):
     #try:
     min_error = 1000
     best_ret = {}
     for i in range(0, X.shape[1], 1):
-        ret = check_func(X, y, f_appr, i, density, density_thresh)
+        ret = check_func(X, y, f_appr, i)
 
         if (ret['error'] is not None) and (ret['error'] < min_error):
             min_error = ret['error']
@@ -378,7 +493,7 @@ def find_best_variable(X, y, f_appr, check_func, density = None, density_thresh 
     #    print(e)
     #    return {}
 
-def check_div_variable(X, y, f_appr, i, density = None, density_thresh = None):
+def check_div_variable(X, y, f_appr, i):
     # f(x, y) = g(y)/x?
     # then d(1/f)/dx = 1/g(y) = (1/f)/x
     
@@ -390,22 +505,17 @@ def check_div_variable(X, y, f_appr, i, density = None, density_thresh = None):
         def predict(self, X):
             return 1/self.f.predict(X)
     f_inv_appr = InvF(f_appr)
-    return check_mult_variable(X, 1/y, f_inv_appr, i, density, density_thresh)
+    return check_mult_variable(X, 1/y, f_inv_appr, i)
     
-def check_mult_variable(X, y, f_appr, i, density = None, density_thresh = None):
+def check_mult_variable(X, y, f_appr, i):
     # f(x, y) = x*g(y)?
     # then df/dx = g(y) = f/x
     min_error = 1000
     min_amount = math.ceil(0.05*len(X))
 
-    df_dx = utils.est_gradient(f_appr, X, fx = y)
-    if (density is not None) and (density_thresh is not None):
-        logprobs = density.score_samples(X)
-        top_idxs, = np.where(logprobs > density_thresh)
-        if len(top_idxs) == 0:
-            top_idxs = np.arange(len(X))
-    else:
-        top_idxs = np.arange(len(X))
+    df_dx = utils.est_gradient(f_appr, X)
+    
+    top_idxs = np.arange(len(X))
     list_errs = abs(df_dx[:, i] - y/X[:, i])
     list_errs = list_errs[top_idxs]
             
@@ -416,7 +526,7 @@ def check_mult_variable(X, y, f_appr, i, density = None, density_thresh = None):
         
     return {'error' : error}
 
-def check_add_variable(X, y, f_appr, i, density = None, density_thresh = None):
+def check_add_variable(X, y, f_appr, i):
     # f(x, y) = c*x + g(y)?
     # then f'(x) = c
     # this will also detect dummy variables (c = 0)
@@ -424,16 +534,9 @@ def check_add_variable(X, y, f_appr, i, density = None, density_thresh = None):
     min_error = 1000
     min_amount = math.ceil(0.05*len(X))
     
-    df_dx = utils.est_gradient(f_appr, X, fx = y)
-    if (density is not None) and (density_thresh is not None):
-        logprobs = density.score_samples(X)
-        top_idxs, = np.where(logprobs > density_thresh)
-        if len(top_idxs) == 0:
-            top_idxs = np.arange(len(X))
-    else:
-        top_idxs = np.arange(len(X))
-
-
+    df_dx = utils.est_gradient(f_appr, X)
+    
+    top_idxs = np.arange(len(X))
     c = np.round(np.mean(df_dx[:, i]))
 
     list_errs = abs(df_dx[:, i] - c)
@@ -451,7 +554,7 @@ def check_add_variable(X, y, f_appr, i, density = None, density_thresh = None):
 ####################
 
 class Simplification():
-    def __init__(self, f_appr, check_func, X = None, y = None, expr = None, density = None, density_thresh = None):
+    def __init__(self, f_appr, check_func, X = None, y = None, expr = None):
         assert hasattr(f_appr, 'predict') and hasattr(f_appr, 'fit')
         assert len(X.shape) == 2 and len(y.shape) == 1
         self.f_appr = f_appr
@@ -459,8 +562,6 @@ class Simplification():
         self.X = X
         self.y = y
         self.expr = expr
-        self.density = density
-        self.density_thresh = density_thresh
     
     def search(self):
         pass
@@ -469,8 +570,8 @@ class Simplification():
         pass 
 
 class MultVar(Simplification):
-    def __init__(self, f_appr, X, y, expr = None, density = None, density_thresh = None):
-        super().__init__(f_appr, check_mult_variable, X, y, expr, density, density_thresh)
+    def __init__(self, f_appr, X, y, expr = None):
+        super().__init__(f_appr, check_mult_variable, X, y, expr)
         self.error = None
         self.idx = None
         
@@ -478,7 +579,7 @@ class MultVar(Simplification):
         return f'MultVar: idx={self.idx}'
 
     def search(self) -> tuple:
-        res = find_best_variable(self.X, self.y, self.f_appr, self.check_func, self.density, self.density_thresh)
+        res = find_best_variable(self.X, self.y, self.f_appr, self.check_func)
         if 'error' in res and 'i' in res:
             self.error = res['error']
             self.idx = res['i']
@@ -510,8 +611,8 @@ class MultVar(Simplification):
         return self.expr
 
 class DivVar(Simplification):
-    def __init__(self, f_appr, X, y, expr = None, density = None, density_thresh = None):
-        super().__init__(f_appr, check_div_variable, X, y, expr, density, density_thresh)
+    def __init__(self, f_appr, X, y, expr = None):
+        super().__init__(f_appr, check_div_variable, X, y, expr)
         self.error = None
         self.idx = None
         
@@ -519,7 +620,7 @@ class DivVar(Simplification):
         return f'DivVar: idx={self.idx}'
 
     def search(self):
-        res = find_best_variable(self.X, self.y, self.f_appr, self.check_func, self.density, self.density_thresh)
+        res = find_best_variable(self.X, self.y, self.f_appr, self.check_func)
         
         if 'error' in res and 'i' in res:
             self.error = res['error']
@@ -552,8 +653,8 @@ class DivVar(Simplification):
         return self.expr
 
 class AddVar(Simplification):
-    def __init__(self, f_appr, X, y, expr = None, density = None, density_thresh = None):
-        super().__init__(f_appr, check_add_variable, X, y, expr, density, density_thresh)
+    def __init__(self, f_appr, X, y, expr = None):
+        super().__init__(f_appr, check_add_variable, X, y, expr)
         self.error = None
         self.idx = None
         self.c = None
@@ -562,7 +663,7 @@ class AddVar(Simplification):
         return f'AddVar: idx={self.idx}, c={self.c}'
         
     def search(self):
-        res = find_best_variable(self.X, self.y, self.f_appr, self.check_func, self.density, self.density_thresh)
+        res = find_best_variable(self.X, self.y, self.f_appr, self.check_func)
         
         if 'error' in res and 'i' in res:
             self.error = res['error']
@@ -595,8 +696,8 @@ class AddVar(Simplification):
         return self.expr
 
 class MultSym(Simplification):
-    def __init__(self, f_appr, X, y, expr = None, density = None, density_thresh = None):
-        super().__init__(f_appr, check_translational_symmetry_multiply, X, y, expr, density, density_thresh)
+    def __init__(self, f_appr, X, y, expr = None):
+        super().__init__(f_appr, check_translational_symmetry_multiply, X, y, expr)
         self.error = None
         self.idxs = None
 
@@ -604,7 +705,7 @@ class MultSym(Simplification):
         return f'MultSym: idxs={self.idxs}'    
     
     def search(self):
-        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func, self.density, self.density_thresh)
+        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func)
         
         if 'error' in res and 'i' in res:
             self.error = res['error']
@@ -633,8 +734,8 @@ class MultSym(Simplification):
         return self.expr
 
 class DivSym(Simplification):
-    def __init__(self, f_appr, X, y, expr = None, density = None, density_thresh = None):
-        super().__init__(f_appr, check_translational_symmetry_divide, X, y, expr, density, density_thresh)
+    def __init__(self, f_appr, X, y, expr = None):
+        super().__init__(f_appr, check_translational_symmetry_divide, X, y, expr)
         self.error = None
         self.idxs = None
 
@@ -642,7 +743,7 @@ class DivSym(Simplification):
         return f'DivSym: idxs={self.idxs}'
 
     def search(self):
-        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func, self.density, self.density_thresh)        
+        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func)        
         if 'error' in res and 'i' in res:
             self.error = res['error']
             self.idxs = [res['i'], res['j']]
@@ -670,8 +771,8 @@ class DivSym(Simplification):
         return self.expr
 
 class AddSym(Simplification):
-    def __init__(self, f_appr, X, y, expr = None, density = None, density_thresh = None):
-        super().__init__(f_appr, check_translational_symmetry_plus, X, y, expr, density, density_thresh)
+    def __init__(self, f_appr, X, y, expr = None):
+        super().__init__(f_appr, check_translational_symmetry_plus, X, y, expr)
         self.error = None
         self.idxs = None
 
@@ -679,7 +780,7 @@ class AddSym(Simplification):
         return f'AddSym: idxs={self.idxs}' 
 
     def search(self):
-        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func, self.density, self.density_thresh)
+        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func)
         if 'error' in res and 'i' in res:
             self.error = res['error']
             self.idxs = [res['i'], res['j']]
@@ -707,8 +808,8 @@ class AddSym(Simplification):
         return self.expr
 
 class SubSym(Simplification):
-    def __init__(self, f_appr, X, y, expr = None, density = None, density_thresh = None):
-        super().__init__(f_appr, check_translational_symmetry_minus, X, y, expr, density, density_thresh)
+    def __init__(self, f_appr, X, y, expr = None):
+        super().__init__(f_appr, check_translational_symmetry_minus, X, y, expr)
         self.error = None
         self.idxs = None
 
@@ -716,7 +817,7 @@ class SubSym(Simplification):
         return f'SubSym: idxs={self.idxs}'
 
     def search(self):
-        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func, self.density, self.density_thresh)
+        res = find_best_symmetry(self.X, self.y, self.f_appr, self.check_func)
         if 'error' in res and 'i' in res:
             self.error = res['error']
             self.idxs = [res['i'], res['j']]
@@ -743,35 +844,28 @@ class SubSym(Simplification):
         self.expr = sympy.sympify(expr_str)
         return self.expr
 
-def find_best_simplification(X:np.ndarray, y:np.ndarray, f_appr, density = None, density_thresh = None, verbose:int = 0):
+def find_best_simplifications(X:np.ndarray, y:np.ndarray, f_appr, verbose:int = 0):
     
-    # Find best eliminations
-    best_error = np.inf
-    best_X = X.copy()
-    best_y = y.copy()
-    best_simpl = None
+    # Find best instance for each simplification type
 
-    simpls = [MultVar(f_appr, X, y, density=density, density_thresh=density_thresh), DivVar(f_appr, X, y, density=density, density_thresh=density_thresh), AddVar(f_appr, X, y, density=density, density_thresh=density_thresh), 
-              MultSym(f_appr, X, y, density=density, density_thresh=density_thresh), DivSym(f_appr, X, y, density=density, density_thresh=density_thresh), AddSym(f_appr, X, y, density=density, density_thresh=density_thresh), SubSym(f_appr, X, y, density=density, density_thresh=density_thresh)]
+    simpls = [MultVar(f_appr, X, y), DivVar(f_appr, X, y), AddVar(f_appr, X, y), 
+              MultSym(f_appr, X, y), DivSym(f_appr, X, y), AddSym(f_appr, X, y), SubSym(f_appr, X, y)]
     
+    ret = []
     for simpl in simpls:
         X_new, y_new = simpl.search()
         error = simpl.error
-
         if verbose > 1:
             print(f'{simpl}: {error}')
-        if (error is not None) and (error < best_error):
-            best_error = error
-            best_X = X_new
-            best_y = y_new
-            best_simpl = simpl
-    if verbose > 1:
-        print(f'Chosen: {best_simpl}')
-    return {'simpl' : best_simpl, 'X' : best_X, 'y' : best_y}
+        ret.append({'simpl' : simpl, 'X' : X_new, 'y' : y_new})
+    return ret
 
-def find_simplifications(X:np.ndarray, y:np.ndarray, appr = approximate_poly, use_density:bool = False, verbose:int = 0, accept_thresh:float = 1e-2):
+def find_simplifications(X:np.ndarray, y:np.ndarray, appr = approximate_poly, loss_fkt = None, verbose:int = 0):
+    # loss_fkt... to decide how "good" a new problem is (smaller = better)
 
-    # Find best eliminations
+    # Find best eliminations by recursively checking whether new problem can still be approximated
+    # Idea: a successful elimination should not make the problem more difficult
+
     Xs = [X.copy()]
     ys = [y.copy()]
     simpls = []
@@ -779,27 +873,52 @@ def find_simplifications(X:np.ndarray, y:np.ndarray, appr = approximate_poly, us
     current_X = X.copy()
     current_y = y.copy()
 
+    f_appr = appr(current_X, current_y)
+    if loss_fkt is not None:
+        current_loss = loss_fkt(current_X, current_y)
+    else:
+        current_loss = np.mean((f_appr.predict(current_X) - current_y)**2)
 
     searching = True
     while current_X.shape[1] > 1 and searching:
-        f_appr = appr(current_X, current_y)
-        if use_density:
-            kde, thresh = get_density_function(current_X)
-        else:
-            kde, thresh = None, None
 
-        mse = np.mean((f_appr.predict(current_X) - current_y)**2)
         if verbose > 0:
-            print(f'MSE: {mse}')
-        if mse < accept_thresh:
-            res = find_best_simplification(current_X, current_y, f_appr, kde, thresh, verbose)
-            current_X = res['X']
-            current_y = res['y']
-            simpl = res['simpl']
+            print(f'Loss: {current_loss}')
 
+        simpl_res = find_best_simplifications(current_X, current_y, f_appr, verbose)  
+        losses = []
+        for res in simpl_res:
+            next_X = res['X']
+            next_y = res['y']
+
+            if next_X is None:
+                loss = np.inf
+            else:
+                if loss_fkt is not None:
+                    loss = loss_fkt(next_X, next_y)
+                else:
+                    f_appr = appr(next_X, next_y)
+                    loss = np.mean((f_appr.predict(next_X) - next_y)**2)
+            losses.append(loss)
+        min_idx = np.argmin(losses)
+
+        current_X = simpl_res[min_idx]['X']
+        current_y = simpl_res[min_idx]['y']
+        simpl = simpl_res[min_idx]['simpl']
+        next_loss = losses[min_idx]
+
+        if verbose > 0:
+            print(f'Next Loss: {next_loss}')
+        if next_loss <= 10*current_loss:
             Xs.append(current_X)
             ys.append(current_y)
             simpls.append(simpl)
+
+            f_appr = appr(current_X, current_y)
+            current_loss = next_loss
+
+            if verbose > 1:
+                print(f'Chosen: {simpl}')
         else:
             searching = False
 
@@ -891,7 +1010,7 @@ def reduction_size(res, expr):
     early_stop = False
     for i in range(len(Xs) - 1):
         X_current, y_current = Xs[i], ys[i]
-        X_next, y_next = Xs[i+1], ys[i+1]
+        y_current = f_current.predict(X_current)
 
         # perform simplification with true function
         simpl = res['simpls'][i]
@@ -958,7 +1077,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
     Sklearn interface.
     '''
 
-    def __init__(self, symb_regr, positives:list = None, expr = None, exec_func = None, approx = approximate_poly, use_density:bool = False, **kwargs):
+    def __init__(self, symb_regr, positives:list = None, expr = None, exec_func = None, approx = approximate_poly, **kwargs):
         '''
         @Params:
             symb_regr... symbolic regressor (has .fit(X, y), .predict(X), .model() function)
@@ -969,7 +1088,6 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         self.expr = expr
         self.exec_func = exec_func
         self.approx = approx
-        self.use_density = use_density
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
@@ -989,7 +1107,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         if verbose > 0:
             print('Recursively searching for Eliminations')
 
-        simpl_res = find_simplifications(X, y, appr = self.approx, verbose = verbose, use_density = self.use_density)
+        simpl_res = find_simplifications(X, y, appr = self.approx, verbose = verbose)
         Xs = simpl_res['Xs']
         ys = simpl_res['ys']
         simpls = simpl_res['simpls']
