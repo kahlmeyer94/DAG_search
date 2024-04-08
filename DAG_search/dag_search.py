@@ -16,6 +16,7 @@ from copy import deepcopy
 import time
 import sklearn
 import sys
+import numbers
 
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.preprocessing import PolynomialFeatures
@@ -2182,7 +2183,11 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             x_symbs = [f'x_{i}' for i in range(X.shape[1])]
             self.exec_func = sympy.lambdify(x_symbs, self.expr)
             
-        return self.exec_func(*[X[:, i] for i in range(X.shape[1])])
+        pred = self.exec_func(*[X[:, i] for i in range(X.shape[1])])
+        if isinstance(pred, numbers.Number):
+            pred = pred*np.ones(X.shape[0])
+        return pred
+
 
     def complexity(self):
         '''
