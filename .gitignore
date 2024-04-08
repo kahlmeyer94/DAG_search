@@ -5,3 +5,4 @@
 *.pt
 results/
 build/
+dist/
