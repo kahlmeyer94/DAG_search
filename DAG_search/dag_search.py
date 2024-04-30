@@ -343,10 +343,10 @@ class Gradient_loss_fkt(DAG_Loss_fkt):
             return losses
         
 
-def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_init:np.ndarray = 0, interval_size:float = 2.0, n_steps:int = 51, return_arg:bool = False) -> tuple:
+def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_init:np.ndarray = 0, interval_size:float = 2.0, n_steps:int = 101, return_arg:bool = False, use_tan:bool = False) -> tuple:
     '''
     Given a computational graph, optimizes for constants using grid search.
-
+ 
     @Params:
         cgraph... computational graph
         X... input for DAG
@@ -355,6 +355,7 @@ def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss
         max_it... maximum number of retries
         c_init... initial constants
         interval_size... size of search interval around c_init
+        use_tan... if True, we will use a tangens transform on the constants
     @Returns:
         constants that have lowest loss, loss
     '''
@@ -372,13 +373,15 @@ def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss
     tmp = np.meshgrid(*[values]*k)
     consts = np.column_stack([x.flatten() for x in tmp])
     consts = consts + np.stack([c_init]*len(consts))
-
-    losses = loss_fkt(X, cgraph, consts)
+    if use_tan:
+        losses = loss_fkt(X, cgraph, np.tan(consts))
+    else:
+        losses = loss_fkt(X, cgraph, consts)
 
     best_idx = np.argmin(losses)
     return consts[best_idx], losses[best_idx]
 
-def get_consts_grid_zoom(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -1, interval_upper:float = 1, n_steps:int = 21, n_zooms:int = 2) -> tuple:
+def get_consts_grid_zoom(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, interval_lower:float = -1, interval_upper:float = 1, n_steps:int = 101, n_zooms:int = 5, use_tan:bool = False) -> tuple:
     '''
     Given a computational graph, optimizes for constants using grid search with zooming.
 
@@ -390,20 +393,24 @@ def get_consts_grid_zoom(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG
         max_it... maximum number of retries
         interval_lower... minimum value for initial constants
         interval_upper... maximum value for initial constants
-
+        use_tan... if True, we will use a tangens transform on the constants
     @Returns:
         constants that have lowest loss, loss
     '''
-    
+    if use_tan:
+        interval_upper = np.pi/2
+        interval_lower = -interval_upper
+
     k = cgraph.n_consts
     interval_size = interval_upper - interval_lower
     c = (interval_upper + interval_lower)/2*np.ones(k)
     stepsize = interval_size/(n_steps - 1)
     for zoom in range(n_zooms):
-        c, loss = get_consts_grid(cgraph, X, loss_fkt, c_init=c, interval_size = interval_size, n_steps=n_steps)
+        c, loss = get_consts_grid(cgraph, X, loss_fkt, c_init=c, interval_size = interval_size, n_steps=n_steps, use_tan=use_tan)
         interval_size = 2*stepsize
         stepsize = interval_size/(n_steps - 1)
-
+    if use_tan:
+        c = np.tan(c)
     return c, loss
 
 def get_consts_opt(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_start:np.ndarray = None, max_it:int = 5, interval_lower:float = -1, interval_upper:float = 1) -> tuple:
@@ -485,6 +492,7 @@ def get_consts_pool(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss
     
         return best_c, best_loss
     return np.array([]), loss_fkt(X, cgraph, np.array([]))
+
 
 ########################
 # DAG creation
@@ -732,8 +740,10 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
 
     if evaluate:
 
-        assert opt_mode in ['pool', 'opt', 'grid', 'grid_opt', 'grid_zoom'], 'Mode has to be one of {pool, opt, grid, grid_opt}'
 
+        assert opt_mode in ['pool', 'opt', 'grid', 'grid_opt', 'grid_zoom', 'grid_zoom_tan'], 'Mode has to be one of {pool, opt, grid, grid_opt}'
+
+        
         if opt_mode == 'pool':
             consts, loss = get_consts_pool(cgraph, X, loss_fkt)
         elif opt_mode == 'opt':
@@ -742,6 +752,8 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
             consts, loss = get_consts_grid(cgraph, X, loss_fkt)
         elif opt_mode == 'grid_zoom':
             consts, loss = get_consts_grid_zoom(cgraph, X, loss_fkt)
+        elif opt_mode == 'grid_zoom_tan':
+            consts, loss = get_consts_grid_zoom(cgraph, X, loss_fkt, use_tan=True)
         elif opt_mode == 'grid_opt':
             consts, loss = get_consts_grid(cgraph, X, loss_fkt)
             consts, loss = get_consts_opt(cgraph, X, loss_fkt, c_start=consts)
@@ -1664,7 +1676,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e6), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e6), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, use_tan:bool = False, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1678,6 +1690,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             loss_fkt... loss function class
             positives... marks which X are strictly positive
             pareto... flag for exhaustive search
+            use_tan... if True, we will use a tangens transform on the constants
         '''
         self.k = k
         self.n_calc_nodes = n_calc_nodes
@@ -1689,6 +1702,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.max_time = max_time
         self.processes = max(min(processes, multiprocessing.cpu_count()), 1)
 
+        self.use_tan = use_tan
         self.random_state = random_state
         self.loss_fkt = loss_fkt
         self.positives = positives
@@ -1723,6 +1737,10 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         m = X_sub.shape[1]
         n = 1
         loss_fkt = self.loss_fkt(y_part)
+        if self.use_tan:
+            opt_mode = 'grid_zoom_tan'
+        else:
+            opt_mode = 'grid_zoom'
         params = {
             'X' : X_sub,
             'n_outps' : n,
@@ -1731,7 +1749,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             'n_calc_nodes' : self.n_calc_nodes,
             'n_processes' : self.processes,
             'topk' : 10,
-            'opt_mode' : 'grid_zoom',
+            'opt_mode' : opt_mode,
             'verbose' : verbose,
             'max_orders' : self.max_orders, 
             'stop_thresh' : self.stop_thresh,
