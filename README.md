@@ -58,4 +58,13 @@ pred, grad = est.predict(X, return_grad = True)
 
 For advanced usage see the Tutorial-Notebook `tutorial.ipynb`.
 
-
+## Citation
+To reference this work, please use the following citation:
+```
+@inproceedings{Kahlmeyer:IJCAI24,
+  title = {Scaling Up Unbiased Search-based Symbolic Regression},
+  author = {Paul Kahlmeyer, Joachim Giesen, Michael Habeck and Henrik Voigt},
+  booktitle={International Joint Conference on Artificial Intelligence},
+  year={2024}
+}
+```
