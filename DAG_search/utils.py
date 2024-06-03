@@ -219,7 +219,7 @@ def simplify(expr, timeout:float = 5.0):
             return expr_simp
         else:
             return expr
-    except (TypeError, KeyError, AttributeError, RecursionError, stopit.utils.TimeoutException):
+    except (TypeError, KeyError, AttributeError, RecursionError, stopit.utils.TimeoutException, stopit.TimeoutException):
         return expr
 
 def tree_size(expr) -> int:
@@ -257,7 +257,7 @@ def is_const(expr, timeout:float = 5.0) -> bool:
             return ret
         else:
             return (len(expr.free_symbols) == 0)
-    except (TypeError, KeyError, AttributeError, RecursionError, stopit.utils.TimeoutException):
+    except (TypeError, KeyError, AttributeError, RecursionError, stopit.utils.TimeoutException, stopit.TimeoutException):
         return (len(expr.free_symbols) == 0)  
     
 def symb_eq(expr_est, expr_true) -> bool:
