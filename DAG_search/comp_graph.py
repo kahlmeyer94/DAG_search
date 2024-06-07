@@ -119,19 +119,19 @@ class CompGraph():
                 self.predecessors[i].append(j)
         
         # set eval function
-        self.eval_funcs, self.eval_funcs_pt = self.get_eval_funcs()
+        self.set_eval_funcs()
     
-    def get_eval_funcs(self):
+    def set_eval_funcs(self):
         k = self.inp_dim + self.n_consts
 
         res_dict = {i : '' for i in self.node_dict}
 
         # inputs        
         for i in range(self.inp_dim):
-            res_dict[i] = f'X[:, :, {i}]'
+            res_dict[i] = f'X_full[:, :, {i}]'
 
         for i in range(self.n_consts):
-            res_dict[i + self.inp_dim] = f'c[:, :, {i}]'
+            res_dict[i + self.inp_dim] = f'c_full[:, :, {i}]'
             
         for i in self.eval_order[k:]:
             children, op = self.node_dict[i]
@@ -149,9 +149,12 @@ class CompGraph():
             
         eval_strs = [res_dict[i] for i in self.outp_nodes]
         eval_strs_pt = [s.replace('np.', 'torch.') for s in eval_strs]
-
         self.eval_strs = eval_strs
-        return [eval('lambda X, c: ' + eval_str) for eval_str in eval_strs], [eval('lambda X, c: ' + eval_str) for eval_str in eval_strs_pt]
+
+        #self.eval_funcs = [eval('lambda X, c: ' + eval_str) for eval_str in eval_strs]
+        #self.eval_funcs_pt = [eval('lambda X, c: ' + eval_str) for eval_str in eval_strs_pt]
+        self.eval_funcs = [compile(eval_str, '<string>', 'eval') for eval_str in eval_strs]
+        self.eval_funcs_pt = [compile(eval_str, '<string>', 'eval') for eval_str in eval_strs_pt]
 
     def get_eval_order(self):
         # get layers of nodes
@@ -729,21 +732,21 @@ class CompGraph():
             c_full = np.broadcast_to(c[:, None, :], (c.shape[0], X.shape[0], c.shape[1])) # r x N x k
 
             if return_grad:
-                X_tensor = torch.tensor(X_full, requires_grad = True).double()
-                c_tensor = torch.tensor(c_full)
+                X_full = torch.tensor(X_full, requires_grad = True).double()
+                c_full = torch.tensor(c_full)
                 
                 if self.outp_dim == 1:
                     # regression case
-                    h_X = self.eval_funcs_pt[0](X_tensor, c_tensor)[:, :, None]
+                    h_X = eval(self.eval_funcs[0])[:, :, None]
                 else:
-                    h_X = torch.stack([self.eval_funcs_pt[i](X_tensor, c_tensor) for i in range(self.outp_dim)], dim = -1)
+                    h_X = torch.stack([eval(self.eval_funcs[i]) for i in range(self.outp_dim)], dim = -1)
 
                 
                 if h_X.requires_grad:
                     # shape: r x n x N x inps
                     h_X_grad = []
                     for i in range(h_X.shape[2]):
-                        part_grad = torch.autograd.grad(h_X[:, :, i], X_tensor, grad_outputs=h_X[:,:,i].data.new(h_X[:,:,i].shape).fill_(1), create_graph=True)[0]
+                        part_grad = torch.autograd.grad(h_X[:, :, i], X_full, grad_outputs=h_X[:,:,i].data.new(h_X[:,:,i].shape).fill_(1), create_graph=True)[0]
                         h_X_grad.append(part_grad.detach().numpy())
                     h_X_grad = np.stack(h_X_grad)
                     h_X_grad = np.transpose(h_X_grad, (1, 0, 2, 3))
@@ -756,9 +759,11 @@ class CompGraph():
                 
                 if self.outp_dim == 1:
                     # regression case
-                    final_result = self.eval_funcs[0](X_full, c_full)[:, :, np.newaxis]
+                    #final_result = self.eval_funcs[0](X_full, c_full)[:, :, np.newaxis]
+                    final_result = eval(self.eval_funcs[0])[:, :, np.newaxis]
                 else:
-                    final_result = np.stack([self.eval_funcs[i](X_full, c_full) for i in range(self.outp_dim)], axis = -1)
+                    #final_result = np.stack([self.eval_funcs[i](X_full, c_full) for i in range(self.outp_dim)], axis = -1)
+                    final_result = np.stack([eval(self.eval_funcs[i]) for i in range(self.outp_dim)], axis = -1)
                 #final_result = np.transpose(final_result, [1, 2, 0])
 
         if return_grad:
