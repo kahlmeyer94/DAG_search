@@ -571,6 +571,7 @@ def adapt_ops(cgraph:comp_graph.CompGraph, build_order:list, node_ops:list) -> c
     for op, (i, parents) in zip(node_ops, build_order):
         node_dict[i] = (list(parents), op)
     cgraph.node_dict = node_dict
+    cgraph.eval_funcs, cgraph.eval_funcs_pt = cgraph.get_eval_funcs()
     return cgraph
 
 def get_build_orders(m:int, n:int, k:int, n_calc_nodes:int, max_orders:int = 10000, verbose:int = 0, fix_size : bool = False) -> list:

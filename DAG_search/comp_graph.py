@@ -40,6 +40,10 @@ class CompGraph():
         self.successors = {}
         self.predecessors = {}
 
+        self.eval_strs = []
+        self.eval_funcs = [] # numpy lambdas
+        self.eval_funcs_pt = [] # pytorch lambdas
+
         if len(self.node_dict) > 0:
             self.update_stats()
 
@@ -88,7 +92,6 @@ class CompGraph():
 
     def update_stats(self):
 
-        
         # update A and R
         n_nodes = len(self.node_dict)
         self.A = np.zeros((n_nodes, n_nodes))
@@ -104,7 +107,7 @@ class CompGraph():
         for order in self.get_eval_order():
             self.eval_order = self.eval_order + order
 
-
+        # set node functionalities
         self.outp_nodes = [self.inp_dim + self.n_consts + i for i in range(self.outp_dim)]
         self.inp_nodes = list(range(self.inp_dim + self.n_consts))
 
@@ -114,6 +117,41 @@ class CompGraph():
             for j in self.node_dict[i][0]:
                 self.successors[j].append(i)
                 self.predecessors[i].append(j)
+        
+        # set eval function
+        self.eval_funcs, self.eval_funcs_pt = self.get_eval_funcs()
+    
+    def get_eval_funcs(self):
+        k = self.inp_dim + self.n_consts
+
+        res_dict = {i : '' for i in self.node_dict}
+
+        # inputs        
+        for i in range(self.inp_dim):
+            res_dict[i] = f'X[:, :, {i}]'
+
+        for i in range(self.n_consts):
+            res_dict[i + self.inp_dim] = f'c[:, :, {i}]'
+            
+        for i in self.eval_order[k:]:
+            children, op = self.node_dict[i]
+            node_op = config.NODE_STR[op]
+            if len(children) == 2:
+                if (children[0] == children[1]) and op == '*':
+                    node_op = '(a)**2' # shortcut
+                elif (children[0] == children[1]) and op == '+':
+                    node_op = '2*(a)'
+                node_result = node_op.replace('a', res_dict[children[0]]).replace('b', res_dict[children[1]])
+            else:
+                assert len(children) == 1
+                node_result = node_op.replace('a', res_dict[children[0]])
+            res_dict[i] = node_result
+            
+        eval_strs = [res_dict[i] for i in self.outp_nodes]
+        eval_strs_pt = [s.replace('np.', 'torch.') for s in eval_strs]
+
+        self.eval_strs = eval_strs
+        return [eval('lambda X, c: ' + eval_str) for eval_str in eval_strs], [eval('lambda X, c: ' + eval_str) for eval_str in eval_strs_pt]
 
     def get_eval_order(self):
         # get layers of nodes
@@ -423,52 +461,7 @@ class CompGraph():
             else:
                 return final_result
 
-    def get_invalids(self, X, c):
-        '''
-        Returns first occurence of a non-finite result as 
-        node, predecessors
-
-        X... N x m matrix
-        c... array of length n_consts
-        '''
-        assert len(self.node_dict) >= self.inp_dim + self.n_consts + self.outp_dim, 'Node dict not initialized'
-        assert len(c.shape) <= 1, 'Constants must be 1D (single)'
-
-        c = c.reshape(1, -1)
-        r = 1
-
-        # we assume that eval order is valid
-
-        N = X.shape[0]
-        k = self.inp_dim + self.n_consts
-
-        res_dict = {i : None for i in self.node_dict}
-
-        # inputs        
-        for i in range(self.inp_dim):
-            res_dict[i] = np.repeat(X[np.newaxis, :, i], r, axis=0) # r x N
-
-        for i in range(self.n_consts):
-            res_dict[i + self.inp_dim] = np.repeat(c[:, i, np.newaxis], N, axis = 1) # r x N
-
-        # others
-        for i in self.eval_order[k:]:
-            children, op = self.node_dict[i]
-            node_op = config.NODE_OPS[op]
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                if len(children) == 2:
-                    node_result = node_op(res_dict[children[0]], res_dict[children[1]])
-                else:
-                    assert len(children) == 1
-                    node_result = node_op(res_dict[children[0]])
-                res_dict[i] = node_result
-                if not np.all(np.isfinite(node_result)):
-                    return [i for i in np.where(self.R[i] > 0)[0] if i >= self.inp_dim + self.n_consts]
-        return []
-
-
-    def evaluate(self, X, c, return_grad = False):
+    def evaluate_old3(self, X, c, return_grad = False):
         '''
         X... N x m matrix
         c... array of length n_consts
@@ -558,6 +551,221 @@ class CompGraph():
             else:
                 return final_result, h_X_grad
 
+        else:
+            if not vec:
+                return final_result[0]
+            else:
+                return final_result
+
+    def evaluate_old(self, X, c, return_grad = False):
+        '''
+        X... N x m matrix
+        c... array of shape n_consts
+        return_grad... if true, will return derivative of output wrt. input
+        '''
+        assert len(self.node_dict) >= self.inp_dim + self.n_consts + self.outp_dim, 'Node dict not initialized'
+        assert len(c.shape) <= 2, 'Constants must be either 1D (single) or 2D (multiple)'
+
+        if len(c.shape) == 2:
+            r = c.shape[0]
+            vec = True
+        else:
+            c = c.reshape(1, -1)
+            r = 1
+            vec = False
+
+        # we assume that eval order is valid
+
+        N = X.shape[0]
+        k = self.inp_dim + self.n_consts
+
+        
+
+        if return_grad:
+            X_stacked = np.repeat(X[np.newaxis, :, :], r, axis=0)
+            X_tensor = torch.tensor(X_stacked, requires_grad = True).double()
+
+            grad_dict = {i : None for i in self.node_dict}      
+
+            for i in range(self.inp_dim):
+                grad_dict[i] = X_tensor[:, :, i]
+
+            for i in range(self.n_consts):
+                grad_dict[i + self.inp_dim] = torch.as_tensor(np.repeat(c[:, i, np.newaxis], N, axis = 1))
+
+            for i in self.eval_order[k:]:
+                children, op = self.node_dict[i]
+                node_op_pt = config.NODE_OPS_PYTORCH[op]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    if len(children) == 2:
+                        node_result = node_op_pt(grad_dict[children[0]], grad_dict[children[1]])
+                    else:
+                        assert len(children) == 1
+                        node_result = node_op_pt(grad_dict[children[0]])
+                    grad_dict[i] = node_result
+
+            h_X = torch.stack([grad_dict[i] for i in self.outp_nodes])
+            h_X = torch.permute(h_X, (1, 2, 0))
+
+            if h_X.requires_grad:
+                # shape: r x n x N x inps
+                h_X_grad = []
+                for i in range(h_X.shape[2]):
+                    part_grad = torch.autograd.grad(h_X[:, :, i], X_tensor, grad_outputs=h_X[:,:,i].data.new(h_X[:,:,i].shape).fill_(1), create_graph=True)[0]
+                    h_X_grad.append(part_grad.detach().numpy())
+                h_X_grad = np.stack(h_X_grad)
+                h_X_grad = np.transpose(h_X_grad, (1, 0, 2, 3))
+            else:
+                h_X_grad = np.zeros((h_X.shape[0], h_X.shape[2], h_X.shape[1], X.shape[1]))
+
+            final_result = h_X.detach().numpy()
+            if not vec:
+                return final_result[0], h_X_grad[0]
+            else:
+                return final_result, h_X_grad
+
+        else:
+            res_dict = {i : None for i in self.node_dict}
+
+            # inputs        
+            for i in range(self.inp_dim):
+                res_dict[i] = np.repeat(X[np.newaxis, :, i], r, axis=0) # r x N
+
+            for i in range(self.n_consts):
+                res_dict[i + self.inp_dim] = np.repeat(c[:, i, np.newaxis], N, axis = 1) # r x N
+
+            # others
+            for i in self.eval_order[k:]:
+                children, op = self.node_dict[i]
+                node_op = config.NODE_OPS[op]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    if len(children) == 2:
+                        node_result = node_op(res_dict[children[0]], res_dict[children[1]])
+                    else:
+                        assert len(children) == 1
+                        node_result = node_op(res_dict[children[0]])
+                    res_dict[i] = node_result
+
+            final_result = np.stack([res_dict[i] for i in self.outp_nodes])
+            final_result = np.transpose(final_result, [1, 2, 0])
+
+            if not vec:
+                return final_result[0]
+            else:
+                return final_result
+
+    def get_invalids(self, X, c):
+        '''
+        Returns first occurence of a non-finite result as 
+        node, predecessors
+
+        X... N x m matrix
+        c... array of length n_consts
+        '''
+        assert len(self.node_dict) >= self.inp_dim + self.n_consts + self.outp_dim, 'Node dict not initialized'
+        assert len(c.shape) <= 1, 'Constants must be 1D (single)'
+
+        c = c.reshape(1, -1)
+        r = 1
+
+        # we assume that eval order is valid
+
+        N = X.shape[0]
+        k = self.inp_dim + self.n_consts
+
+        res_dict = {i : None for i in self.node_dict}
+
+        # inputs        
+        for i in range(self.inp_dim):
+            res_dict[i] = np.repeat(X[np.newaxis, :, i], r, axis=0) # r x N
+
+        for i in range(self.n_consts):
+            res_dict[i + self.inp_dim] = np.repeat(c[:, i, np.newaxis], N, axis = 1) # r x N
+
+        # others
+        for i in self.eval_order[k:]:
+            children, op = self.node_dict[i]
+            node_op = config.NODE_OPS[op]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                if len(children) == 2:
+                    node_result = node_op(res_dict[children[0]], res_dict[children[1]])
+                else:
+                    assert len(children) == 1
+                    node_result = node_op(res_dict[children[0]])
+                res_dict[i] = node_result
+                if not np.all(np.isfinite(node_result)):
+                    return [i for i in np.where(self.R[i] > 0)[0] if i >= self.inp_dim + self.n_consts]
+        return []
+
+    def evaluate(self, X, c, return_grad = False):
+        '''
+        X... N x m matrix
+        c... array of shape n_consts
+        return_grad... if true, will return derivative of output wrt. input
+        '''
+        assert len(self.node_dict) >= self.inp_dim + self.n_consts + self.outp_dim, 'Node dict not initialized'
+        assert len(c.shape) <= 2, 'Constants must be either 1D (single) or 2D (multiple)'
+
+        if len(c.shape) == 2:
+            r = c.shape[0]
+            vec = True
+        else:
+            c = c.reshape(1, -1)
+            r = 1
+            vec = False
+
+        # we assume that eval order is valid
+
+        N = X.shape[0]
+        k = self.inp_dim + self.n_consts
+
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            X_full = np.broadcast_to(X, (c.shape[0], X.shape[0], X.shape[1])) # r x N x m
+            c_full = np.broadcast_to(c[:, None, :], (c.shape[0], X.shape[0], c.shape[1])) # r x N x k
+
+            if return_grad:
+                X_tensor = torch.tensor(X_full, requires_grad = True).double()
+                c_tensor = torch.tensor(c_full)
+                
+                if self.outp_dim == 1:
+                    # regression case
+                    h_X = self.eval_funcs_pt[0](X_tensor, c_tensor)[:, :, None]
+                else:
+                    h_X = torch.stack([self.eval_funcs_pt[i](X_tensor, c_tensor) for i in range(self.outp_dim)], dim = -1)
+
+                
+                if h_X.requires_grad:
+                    # shape: r x n x N x inps
+                    h_X_grad = []
+                    for i in range(h_X.shape[2]):
+                        part_grad = torch.autograd.grad(h_X[:, :, i], X_tensor, grad_outputs=h_X[:,:,i].data.new(h_X[:,:,i].shape).fill_(1), create_graph=True)[0]
+                        h_X_grad.append(part_grad.detach().numpy())
+                    h_X_grad = np.stack(h_X_grad)
+                    h_X_grad = np.transpose(h_X_grad, (1, 0, 2, 3))
+                else:
+                    h_X_grad = np.zeros((h_X.shape[0], h_X.shape[2], h_X.shape[1], X.shape[1]))
+
+                final_result = h_X.detach().numpy()
+                
+            else:
+                
+                if self.outp_dim == 1:
+                    # regression case
+                    final_result = self.eval_funcs[0](X_full, c_full)[:, :, np.newaxis]
+                else:
+                    final_result = np.stack([self.eval_funcs[i](X_full, c_full) for i in range(self.outp_dim)], axis = -1)
+                #final_result = np.transpose(final_result, [1, 2, 0])
+
+        if return_grad:
+            if not vec:
+                return final_result[0], h_X_grad[0]
+            else:
+                return final_result, h_X_grad
         else:
             if not vec:
                 return final_result[0]
