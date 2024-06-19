@@ -843,16 +843,16 @@ def evaluate_build_order(order:list, m:int, n:int, k:int, X:np.ndarray, loss_fkt
         inv_array = []
         inv_mask = []
         for ops in itertools.product(*op_spaces):
+            
             if (start_time is not None) and ((time.time() - start_time) >= max_time):
                 break
             accept = True
             if accept_ratio < 1.0:
                 accept = (np.random.rand() < accept_ratio)
-
             
             if len(inv_array) > 0:
                 num_ops = np.array([config.NODE_ID[op] for op in ops])
-                is_inv = np.sum((inv_array - num_ops)*inv_mask, axis = 1)
+                is_inv = np.sum((abs(inv_array - num_ops))*inv_mask, axis = 1)
                 is_inv = np.any(is_inv == 0)
             else:
                 is_inv = False
