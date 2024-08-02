@@ -62,9 +62,17 @@ For advanced usage see the Tutorial-Notebook `tutorial.ipynb`.
 To reference this work, please use the following citation:
 ```
 @inproceedings{Kahlmeyer:IJCAI24,
-    title={Scaling Up Unbiased Search-based Symbolic Regression}, 
-    author={Paul Kahlmeyer and Joachim Giesen and Michael Habeck and Henrik Voigt},
-    year={2024},
-    booktitle={Proceedings of the 33st International Joint Conference on Artificial Intelligence ({IJCAI})}
+  title     = {Scaling Up Unbiased Search-based Symbolic Regression},
+  author    = {Kahlmeyer, Paul and Giesen, Joachim and Habeck, Michael and Voigt, Henrik},
+  booktitle = {Proceedings of the Thirty-Third International Joint Conference on
+               Artificial Intelligence, {IJCAI-24}},
+  publisher = {International Joint Conferences on Artificial Intelligence Organization},
+  editor    = {Kate Larson},
+  pages     = {4264--4272},
+  year      = {2024},
+  month     = {8},
+  note      = {Main Track},
+  doi       = {10.24963/ijcai.2024/471},
+  url       = {https://doi.org/10.24963/ijcai.2024/471},
 }
 ```
