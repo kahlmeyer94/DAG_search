@@ -737,7 +737,11 @@ def evaluate_cgraph(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:callable
 
 
     if (not loss_fkt.opt_const) or (cgraph.n_consts == 0):
-        return np.array([]), loss_fkt(X, cgraph, np.array([]))
+        loss = loss_fkt(X, cgraph, np.array([]))
+        if loss_thresh is not None:
+            if loss <= loss_thresh:
+                stop_var = True
+        return np.array([]), loss
 
     if evaluate:
 
