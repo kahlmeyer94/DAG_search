@@ -5,6 +5,7 @@
 # Symbolic DAG Search
 Systematically searching the space of small directed, acyclic graphs (DAGs).
 
+Published in the Paper: Scaling Up Unbiased Search-based Symbolic Regression, where it is named UDFS (Unbiased DAG Frame Search).
 
 ## Installation
 **Option 1**
