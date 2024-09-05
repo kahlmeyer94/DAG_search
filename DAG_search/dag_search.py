@@ -1189,6 +1189,9 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
 
         with ctx.Pool(processes=n_processes, initializer=init_process, initargs=(early_stop,)) as pool:
             pool_results = pool.starmap(evaluate_build_order, pbar)
+        
+        if verbose > 0:
+            print('Collecting results')
         for i, (consts, losses, ops) in enumerate(pool_results):
             if early_stop:
                 break
