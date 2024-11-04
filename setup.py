@@ -28,7 +28,7 @@ setup(
     license='MIT',
     author="Paul Kahlmeyer",
     author_email='paul.kahlmeyer@uni-jena.de',
-    url = 'https://github.com/kahlmeyer94/UDFS',
+    url = 'https://github.com/kahlmeyer94/Unbiased-DAG-Frame-Search',
     packages = ['DAG_search'],
     install_requires = requirements
 )
