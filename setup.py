@@ -23,12 +23,12 @@ requirements = [
 setup(
     name='DAG_search',
     version=1.0,
-    description = "An open source python library for symbolic regression based on searching the space of DAGs.",
+    description = "An open source python library for optimization based on searching the space of small expression DAGs.",
     long_description = readme,
     license='MIT',
     author="Paul Kahlmeyer",
     author_email='paul.kahlmeyer@uni-jena.de',
-    url = 'https://github.com/kahlmeyer94/DAG_search',
+    url = 'https://github.com/kahlmeyer94/UDFS',
     packages = ['DAG_search'],
     install_requires = requirements
 )
