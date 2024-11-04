@@ -1,12 +1,12 @@
 #install dag search
 
 # remove directory if it exists
-if [ -d "DAG-Search" ]; then
-    rm -rf DAG-Search
+if [ -d "UDFS" ]; then
+    rm -rf UDFS
 fi
 
-git clone https://github.com/kahlmeyer94/DAG-Search
+git clone https://github.com/kahlmeyer94/UDFS
 
-cd DAG-Search
+cd UDFS
 pip install -r requirements.txt
 python setup.py install
