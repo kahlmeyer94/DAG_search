@@ -1,12 +1,12 @@
 #install dag search
 
 # remove directory if it exists
-if [ -d "DAG_search" ]; then
-    rm -rf DAG_search
+if [ -d "DAG-Search" ]; then
+    rm -rf DAG-Search
 fi
 
-git clone https://github.com/kahlmeyer94/DAG_search
+git clone https://github.com/kahlmeyer94/DAG-Search
 
-cd DAG_search
+cd DAG-Search
 pip install -r requirements.txt
 python setup.py install
