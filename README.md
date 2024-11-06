@@ -7,6 +7,8 @@ Systematically searching the space of small directed, acyclic graphs (DAGs).
 
 Published in the Paper: Scaling Up Unbiased Search-based Symbolic Regression, where it is named UDFS (Unbiased DAG Frame Search).
 
+For some reason, Google Search did not pick up upon the original github repo. So if you found this repo via the github.io page, you can find the original repository [here](https://github.com/kahlmeyer94/DAG_search).
+
 ## Installation
 **Option 1**
 
