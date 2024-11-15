@@ -737,9 +737,9 @@ class CompGraph():
                 
                 if self.outp_dim == 1:
                     # regression case
-                    h_X = eval(self.eval_funcs[0])[:, :, None]
+                    h_X = eval(self.eval_funcs_pt[0])[:, :, None]
                 else:
-                    h_X = torch.stack([eval(self.eval_funcs[i]) for i in range(self.outp_dim)], dim = -1)
+                    h_X = torch.stack([eval(self.eval_funcs_pt[i]) for i in range(self.outp_dim)], dim = -1)
 
                 
                 if h_X.requires_grad:
