@@ -7,6 +7,7 @@ import traceback
 from DAG_search import config
 import warnings
 import networkx as nx
+import numbers
 
 #####################################
 # Pareto Front
@@ -198,6 +199,14 @@ def mean_confidence_interval(data : list, confidence : float = 0.95) -> tuple:
 #####################################
 # Symbolic Checks
 #####################################
+def eval_expr(expr, X):
+    x_symbs = [f'x_{i}' for i in range(X.shape[1])]
+    exec_func = sympy.lambdify(x_symbs, expr)
+    pred = exec_func(*[X[:, i] for i in range(X.shape[1])])
+    if isinstance(pred, numbers.Number):
+        pred = pred*np.ones(X.shape[0])
+    return pred
+
 
 def simplify(expr, timeout:float = 5.0):
     '''
