@@ -9,4 +9,4 @@ git clone https://github.com/kahlmeyer94/DAG_search
 
 cd DAG_search
 pip install -r requirements.txt
-python setup.py install
+pip install .
