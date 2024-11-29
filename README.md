@@ -35,13 +35,38 @@ bash install.sh
 
 Lets consider a regression problem with `N` samples of inputs `X` (shape `N x m`) and outputs `y` (shape `N`). 
 
-Estimation of an expression is as simple as this:
+Estimation of an expression can be done with three types of regressors:
+
+#### UDFS
+This is the base UDFS regressor.
 
 ```
 from DAG_search import dag_search
 est = dag_search.DAGRegressor()
 est.fit(X, y)
 ```
+
+#### UDFS + Aug
+This is UDFS with Augmentations as described in our paper.
+
+```
+from DAG_search import dag_search
+est = dag_search.DAGRegressorPoly()
+est.fit(X, y)
+```
+
+#### UDFS + Aug + Eliminations
+Here we wrap any symbolic regressor into an outer loop that detects variable eliminations.
+This is especially useful if have regression problems with a lot of inputs.
+
+```
+from DAG_search import dag_search, eliminations
+regr = dag_search.DAGRegressorPoly() # or DAGRegressor
+est = eliminations.EliminationRegressor(regr)
+est.fit(X, y)
+```
+
+#### Inference of the models
 
 The fitted expression can then be accessed via
 ```
