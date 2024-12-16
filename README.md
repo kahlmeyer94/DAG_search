@@ -48,7 +48,7 @@ udfs.fit(X, y)
 
 #### UDFS + Aug
 This is UDFS with Augmentations as described in our paper.
-
+Here we wrap any symbolic regressor into an outer loop that detects variable augmentations.
 ```
 from DAG_search import dag_search
 udfs = dag_search.DAGRegressor() # UDFS
@@ -58,8 +58,7 @@ udfs_aug.fit(X, y, verbose = 0)
 
 #### UDFS + Aug + Eliminations
 Here we wrap any symbolic regressor into an outer loop that detects variable eliminations.
-This is especially useful if have regression problems with a lot of inputs.
-
+This is especially useful if we have regression problems with a lot of inputs.
 ```
 from DAG_search import dag_search, eliminations
 udfs = dag_search.DAGRegressor()
@@ -88,6 +87,9 @@ pred, grad = est.predict(X, return_grad = True)
 
 For advanced usage see the Tutorial-Notebook `tutorial.ipynb`.
 
+## Keywords
+
+
 ## Rescaling Data
 - If your dependend variable contains very large values, consider fitting on a rescaled variable and unscaling the model afterwards.
 For example you could fit on `X, y/c` and unscale your model with 
@@ -99,6 +101,9 @@ For example you could fit on `X, y/c` and unscale your model with
   expr = regr.model()
   expr.subs((s, c*s) for s in expr.free_symbols)
   ```
+
+
+
 
 ## Citation
 To reference this work, please use the following citation:
