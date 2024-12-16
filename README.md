@@ -87,7 +87,36 @@ pred, grad = est.predict(X, return_grad = True)
 
 For advanced usage see the Tutorial-Notebook `tutorial.ipynb`.
 
-## Keywords
+## Parameters
+
+#### UDFS
+- `k`... Number of constants that are allowed in the expression. Increasing will increase the time used for constant optimization (Default = 1).
+- `n_calc_nodes`... Maximum number of intermediate calculation nodes in the expression DAG. Increasing this number will increase the search space, but allows more complex expressions (Default = 5).
+- `max_orders`... Maximum number of expression - skeletons in search. If it is greater than the search space, we have a true exhaustive search (Default = 1e6).
+- `random_state`... set to number for reproducibility, set to None to ignore (Default = None).
+- `processes`... number of processes used in multiprocessing (Default = 1).
+- `max_samples`... maximum number of datapoints at which we evaluate, Lower = Faster. Set to None to ignore (Default = None).
+- `stop_thresh`... If Loss < this threshold, will stop early (Default = 1e-20).
+- `loss_fkt`... Loss function to optimize for. See `dag_search.py` for other examples (Default = `dag_search.MSE_loss_fkt`).
+- `max_time`... maximum runtime in seconds (Default = 1800).
+- `use_tan`... If True, will search constants using a tangens transformation, which essentially covers the interval [-inf, inf]. Otherwise will use [-10, 10] (Default = False).
+
+
+#### Augmentation Regressor
+
+- `random_state`... set to number for reproducibility, set to None to ignore (Default = None).
+- `simpl_nodes`... Number of intermediary nodes for possible augmentations (Default = 2).
+- `topk`... Number of augmentations to consider (Default = 1).
+- `max_orders`... Maximum number of expression - skeletons in search for augmentations (Default = 1e5).
+- `max_degree`... Maximum degree for Polynomials (Default = 5)
+- `max_tree_size`... For selecting a best model, we return best expression from pareto front with less than this number of nodes (Default = 30).
+-  `max_samples`... maximum number of datapoints at which we evaluate. Set to None to ignore (Default = None).
+- `processes`... number of processes used in multiprocessing (Default = 1).
+- `regr_search`... symbolic regressor used to search for solutions to augmented problems. Set to None to use default UDFS (Default = None).
+- `fit_thresh`... We consider models with an R2 Score greater than this as recovered. Set to > 1.0 to ignore (Default = 1-(1e-8)).
+
+#### Elimination Regressor
+- `symb_regr`... symbolic regressor that is used to tackle the reduced problems
 
 
 ## Rescaling Data

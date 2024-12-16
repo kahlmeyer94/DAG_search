@@ -1983,7 +1983,7 @@ class AugRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_samples:int = None, processes:int = 1, regr_search = None, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_samples:int = None, processes:int = 1, regr_search = None, fit_thresh:float = 1-(1e-8), **kwargs):
         self.random_state = random_state
         self.processes = processes
         if regr_search is None:
@@ -1997,10 +1997,11 @@ class AugRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.max_degree = max_degree
         self.max_tree_size = max_tree_size
         self.max_samples = max_samples
+        self.fit_thresh = fit_thresh
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
         max_tree_size = self.max_tree_size
-        fit_thresh = 1-(1e-8) # we consider everything above this as 'recovered'
+        fit_thresh = self.fit_thresh # we consider everything above this as 'recovered'
 
         if self.random_state is not None:
             np.random.seed(self.random_state)
