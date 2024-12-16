@@ -1684,7 +1684,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for exhaustive search.
     '''
 
-    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e6), random_state:int = None, processes:int = 1, max_samples:int = 100, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, use_tan:bool = False, **kwargs):
+    def __init__(self, k:int = 1, n_calc_nodes:int = 5, max_orders:int = int(1e6), random_state:int = None, processes:int = 1, max_samples:int = None, stop_thresh:float = 1e-20, mode : str = 'exhaustive', loss_fkt :DAG_Loss_fkt = MSE_loss_fkt, max_time:float = 1800.0, positives:list = None, pareto:bool = False, use_tan:bool = False, **kwargs):
         '''
         @Params:
             k.... number of constants
@@ -1731,7 +1731,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         if self.random_state is not None:
             np.random.seed(self.random_state)
 
-        if len(X) > self.max_samples:
+        if (self.max_samples is not None) and (len(X) > self.max_samples):
             sub_idx = np.arange(len(X))
             np.random.shuffle(sub_idx)
             sub_idx = sub_idx[:self.max_samples]
