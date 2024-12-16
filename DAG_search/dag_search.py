@@ -1976,17 +1976,20 @@ class BaseReg():
                 expr += alpha*x_name
         return expr
 
-class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class AugRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic DAG-Search
 
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_samples:int = 100, processes:int = 1, **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_samples:int = None, processes:int = 1, regr_search = None, **kwargs):
         self.random_state = random_state
         self.processes = processes
-        self.regr_search = self.regr_search = DAGRegressor(processes=self.processes, random_state = self.random_state)
+        if regr_search is None:
+            self.regr_search  = DAGRegressor(processes=self.processes, random_state = self.random_state)
+        else:
+            self.regr_search = regr_search
         self.regr_poly = None
         self.simpl_nodes = simpl_nodes
         self.max_orders = max_orders
@@ -2098,7 +2101,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
                             expr = self.regr_poly.model()
                             expr = self._translate(X, expr, repl_expr)
-                            expr = utils.round_floats(expr, round_digits = 3)
+                            #expr = utils.round_floats(expr, round_digits = 3)
                             expr = utils.simplify(expr)
                             exprs.append(expr)
                             ts = utils.tree_size(expr)
@@ -2120,12 +2123,12 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
 
                             expr = self.regr_search.model()
                             expr = self._translate(X, expr, repl_expr)
-                            expr = utils.round_floats(expr, round_digits = 3)
+                            #expr = utils.round_floats(expr, round_digits = 3)
                             expr = utils.simplify(expr)
                             exprs.append(expr)
                             ts = utils.tree_size(expr)
                             if verbose > 0:
-                                print(f'DAG: {score} Size: {ts}')
+                                print(f'Regressor: {score} Size: {ts}')
                             if score >= fit_thresh and ts < max_tree_size:
                                 if verbose > 0:
                                     print(f'Expression found trough exhaustive search with a substitution')
@@ -2141,7 +2144,7 @@ class DAGRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 pred = self.regr_search.predict(X)
                 score = r2_score(y, pred)
                 scores.append(score)
-                expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
+                #expr = utils.round_floats(self.regr_search.model(), round_digits = 5)
                 exprs.append(expr)
 
 
