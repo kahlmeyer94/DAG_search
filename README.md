@@ -42,8 +42,8 @@ This is the base UDFS regressor.
 
 ```
 from DAG_search import dag_search
-est = dag_search.DAGRegressor()
-est.fit(X, y)
+udfs = dag_search.DAGRegressor()
+udfs.fit(X, y)
 ```
 
 #### UDFS + Aug
@@ -51,8 +51,9 @@ This is UDFS with Augmentations as described in our paper.
 
 ```
 from DAG_search import dag_search
-est = dag_search.DAGRegressorPoly()
-est.fit(X, y)
+udfs = dag_search.DAGRegressor() # UDFS
+udfs_aug = dag_search.AugRegressorPoly(regr_search = udfs) # UDFS + Aug
+udfs_aug.fit(X, y, verbose = 0)
 ```
 
 #### UDFS + Aug + Eliminations
@@ -61,9 +62,10 @@ This is especially useful if have regression problems with a lot of inputs.
 
 ```
 from DAG_search import dag_search, eliminations
-regr = dag_search.DAGRegressorPoly() # or DAGRegressor
-est = eliminations.EliminationRegressor(regr)
-est.fit(X, y)
+udfs = dag_search.DAGRegressor()
+udfs_aug = dag_search.AugRegressorPoly(regr_search = udfs)
+udfs_aug_elim = eliminations.EliminationRegressor(udfs_aug)
+udfs_aug_elim.fit(X, y)
 ```
 
 #### Inference of the models
@@ -85,6 +87,18 @@ pred, grad = est.predict(X, return_grad = True)
 
 
 For advanced usage see the Tutorial-Notebook `tutorial.ipynb`.
+
+## Rescaling Data
+- If your dependend variable contains very large values, consider fitting on a rescaled variable and unscaling the model afterwards.
+For example you could fit on `X, y/c` and unscale your model with 
+  ```
+  c*regr.model()
+  ```
+- Similarly you can rescale your independent variables and fit on `X/c, y`. In the final model, the unscaling can be done via sympys [substitutions](https://docs.sympy.org/latest/tutorials/intro-tutorial/basic_operations.html#substitution):
+  ```
+  expr = regr.model()
+  expr.subs((s, c*s) for s in expr.free_symbols)
+  ```
 
 ## Citation
 To reference this work, please use the following citation:
