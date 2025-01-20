@@ -131,8 +131,25 @@ For example you could fit on `X, y/c` and unscale your model with
   expr.subs((s, c*s) for s in expr.free_symbols)
   ```
 
+## Dimensional Analysis
+In case you have measurements with units and want to do dimensional analysis first, 
+we provide the necessary tools in `dimensional_analysis.py`:
+```
+# collected data
+X = np.random.rand(100, 4)
 
+# Unit table m, s, kg, V
+D = [
+    [2, -2, 1, -1, 0], # charge
+    [1, -2, 1, -2, 0], # permitivity
+    [1, 0, 0, 0, 0], # length
+    [-1, 0, 0, 1, 0], # electric field
+]
 
+# Analysis
+dim_analysis = da.DA_Buckingham()
+X_new, transl_dict = dim_analysis.fit(D, X)
+```
 
 ## Citation
 To reference this work, please use the following citation:
