@@ -1983,7 +1983,7 @@ class AugRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     Sklearn interface for symbolic Regressor based on replacement strategies.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_samples:int = None, processes:int = 1, regr_search = None, fit_thresh:float = 1-(1e-8), **kwargs):
+    def __init__(self, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_time_aug:float = 900, max_samples:int = None, processes:int = 1, regr_search = None, fit_thresh:float = 1-(1e-8), **kwargs):
         self.random_state = random_state
         self.processes = processes
         if regr_search is None:
@@ -1997,6 +1997,7 @@ class AugRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         self.max_degree = max_degree
         self.max_tree_size = max_tree_size
         self.max_samples = max_samples
+        self.max_time_aug = max_time_aug
         self.fit_thresh = fit_thresh
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 0):
@@ -2071,7 +2072,8 @@ class AugRegressorPoly(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
                 'opt_mode' : 'grid_zoom',
                 'verbose' : verbose,
                 'max_orders' : self.max_orders, 
-                'stop_thresh' : 1e-20
+                'stop_thresh' : 1e-20,
+                'max_time' : self.max_time_aug
             }
             res = exhaustive_search(**params)
 

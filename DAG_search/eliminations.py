@@ -153,8 +153,10 @@ class Dimensional_Loss_Fkt(dag_search.DAG_Loss_fkt):
                         new_X = np.column_stack([X[:, i] for i in range(X.shape[1]) if i not in idxs] + [fx])
                     else:
                         new_X = np.column_stack([fx] + [X[:, i] for i in range(X.shape[1]) if i not in idxs])
-                    
-                    loss = self.score_func(new_X[:, :-1], new_X[:, -1])
+                    try:
+                        loss = self.score_func(new_X[:, :-1], new_X[:, -1])
+                    except ValueError:
+                        loss = np.inf
                 else:
                     loss = np.inf
             else:
