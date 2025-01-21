@@ -132,11 +132,14 @@ For example you could fit on `X, y/c` and unscale your model with
   ```
 
 ## Dimensional Analysis
-In case you have measurements with units and want to do dimensional analysis first, 
-we provide the necessary tools in `dimensional_analysis.py`:
+In case you have measurements with units, we provide the necessary tools to perform a dimensional analysis
+using [Buckingham's Pi Theorem](https://en.wikipedia.org/wiki/Buckingham_%CF%80_theorem).
 ```
+from DAG_search import dimensional_analysis as da
+
 # collected data
-X = np.random.rand(100, 4)
+# assume we collected the four quantities charge, permitivity, length and the electric field
+X = ... 
 
 # Unit table m, s, kg, V
 D = [
@@ -150,6 +153,12 @@ D = [
 dim_analysis = da.DA_Buckingham()
 X_new, transl_dict = dim_analysis.fit(D, X)
 ```
+Any expression in these dimensionless quantities can then be translated back into the original dimensions using
+
+```
+dim_analysis.translate(expr, transl_dict)
+```
+
 
 ## Citation
 To reference this work, please use the following citation:
