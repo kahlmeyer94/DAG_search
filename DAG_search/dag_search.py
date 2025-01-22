@@ -343,6 +343,70 @@ class Gradient_loss_fkt(DAG_Loss_fkt):
             return losses
         
 
+# Invariants
+
+class Invariant_loss_fkt(DAG_Loss_fkt):
+    def __init__(self, grad_min = 1e-1, grad_max = 1e5, value_max = 1e5):
+        '''
+        Loss function for finding DAG for implicit functions.
+
+        @Params:
+            grad_min... minimum absolute value for gradient
+            grad_max... maximum absolute value for gradient
+            value_max... maximum absolute value for invariant
+        '''
+        super().__init__()
+        self.grad_min = grad_min
+        self.grad_max = grad_max
+        self.value_max = value_max
+        
+    def __call__(self, X:np.ndarray, cgraph:comp_graph.CompGraph, c:np.ndarray) -> np.ndarray:
+        '''
+        Lossfkt(X, graph, consts)
+
+        @Params:
+            X... input for DAG (N x m)
+            cgraph... computational Graph
+            c... array of constants (2D)
+
+        @Returns:
+            Variance of function values (should be small), if maximum absolute gradient is >= alpha
+        '''
+        if len(c.shape) == 2:
+            r = c.shape[0]
+            vec = True
+        else:
+            r = 1
+            c = c.reshape(1, -1)
+            vec = False
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+
+            pred, grad = cgraph.evaluate(X, c, return_grad = True)
+            grad[np.isnan(grad)] = 0
+            pred = pred[:, :, 0]
+            losses = np.mean(((pred.T - np.mean(pred, axis = 1))**2), axis = 0)    
+
+            absgrad = np.abs(grad).reshape(r, -1)  
+            invalid = np.mean(absgrad, axis = 1) > self.grad_max
+            invalid = invalid | (np.mean(absgrad, axis = 1) < self.grad_min)
+            
+            absvalue = np.abs(pred)
+            invalid = invalid | (np.mean(absvalue, axis = 1) > self.value_max)
+
+            # must not be nan or inf
+            invalid = invalid | (~np.isfinite(losses))
+            
+        # consider not using inf, since optimizers struggle with this
+        losses[invalid] = np.inf
+        losses[losses < 0] = np.inf
+
+        if not vec:
+            return losses[0]
+        else:
+            return losses
+
 def get_consts_grid(cgraph:comp_graph.CompGraph, X:np.ndarray, loss_fkt:DAG_Loss_fkt, c_init:np.ndarray = 0, interval_size:float = 2.0, n_steps:int = 101, return_arg:bool = False, use_tan:bool = False) -> tuple:
     '''
     Given a computational graph, optimizes for constants using grid search.
