@@ -61,7 +61,7 @@ def translate_back(expr, transl_dict):
     y_symb = sympy.Symbol('y')
     res = sympy.solve(total_expr, y_symb)
     assert len(res) > 0
-    return sympy.sympify(str(res[0]).replace('g', f'({x_expr})'))
+    return [sympy.sympify(str(r).replace('g', f'({x_expr})')) for r in res]
     
 def get_transl_dict(d, expr_sub, current_dict = {}):
     # given a substitution + translation, creates a new translation
@@ -574,14 +574,26 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
             # solving with Symbolic regressor
             self.symb_regr.fit(X_tmp, y_tmp, verbose = verbose)
             try:
-                current_expr = translate_back(self.symb_regr.model(), transl_dict)
-                for x in current_expr.free_symbols:
-                    idx = int(str(x).split('_')[-1])
-                    if self.positives[idx]:
-                        current_expr = current_expr.subs(x, sympy.Symbol(str(x), positive = True))
-                exec_func = sympy.lambdify(x_symbs, current_expr)
-                pred = exec_func(*[X[:, i] for i in range(X.shape[1])])
-                score = r2_score(y, pred)
+                expr_list = translate_back(self.symb_regr.model(), transl_dict)
+                scores = []
+                exec_funcs = []
+                current_exprs = []
+
+                for current_expr in expr_list:
+                    for x in current_expr.free_symbols:
+                        idx = int(str(x).split('_')[-1])
+                        if self.positives[idx]:
+                            current_expr = current_expr.subs(x, sympy.Symbol(str(x), positive = True))
+                    current_exprs.append(current_expr)
+                    exec_func = sympy.lambdify(x_symbs, current_expr)
+                    pred = exec_func(*[X[:, i] for i in range(X.shape[1])])
+                    score = r2_score(y, pred)
+                    scores.append(score)
+                    exec_funcs.append(exec_func)
+                best_idx = np.argmax(scores)
+                score = scores[best_idx]
+                exec_func = exec_funcs[best_idx]
+                current_expr = current_exprs[best_idx]
             except:
                 score = -np.inf
                 continue
