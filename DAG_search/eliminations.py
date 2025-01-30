@@ -516,7 +516,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
     Sklearn interface.
     '''
 
-    def __init__(self, symb_regr, only_input:bool = False, positives:list = None, expr = None, exec_func = None, score_fkt = codec_coefficient, **kwargs):
+    def __init__(self, symb_regr, only_input:bool = False, positives:list = None, expr = None, exec_func = None, score_fkt = codec_coefficient, early_stop_thresh = 0.99999, **kwargs):
         '''
         @Params:
             symb_regr... symbolic regressor (has .fit(X, y), .predict(X), .model() function)
@@ -529,6 +529,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         self.exec_func = exec_func
         self.score_fkt = score_fkt
         self.only_input = only_input
+        self.early_stop_thresh = early_stop_thresh
 
     def fit(self, X:np.ndarray, y:np.ndarray, verbose:int = 1):
         '''
@@ -540,7 +541,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         assert len(y.shape) == 1, f'y must be 1-dimensional (current shape: {y.shape})'
         
 
-        r2_thresh = 1-1e-5 # if solution is found with higher r2 score than this: early stop
+        r2_thresh = self.early_stop_thresh # if solution is found with higher r2 score than this: early stop
         x_symbs = [f'x_{i}' for i in range(X.shape[1])]
 
         self.positives = np.all(X > 0, axis = 0)
