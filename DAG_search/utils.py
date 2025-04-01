@@ -9,6 +9,21 @@ import warnings
 import networkx as nx
 import numbers
 
+def split_extrapolation(X, y, test_size = 0.2, random_state = None):
+
+    if random_state is not None:
+        np.random.seed(random_state)
+
+    select_idx = np.random.randint(len(X))
+    # take points with highest distance to mean as extrapolation points
+    train_amount = int((1-test_size)*len(X))
+    sort_idxs = np.argsort(np.linalg.norm(X - X[select_idx], axis = 1))
+    train_idxs = sort_idxs[:train_amount]
+    test_idxs = sort_idxs[train_amount:]
+    X_train, y_train = X[train_idxs], y[train_idxs]
+    X_test, y_test = X[test_idxs], y[test_idxs]
+    return X_train, X_test, y_train, y_test
+
 #####################################
 # Pareto Front
 #####################################

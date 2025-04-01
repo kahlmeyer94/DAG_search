@@ -509,7 +509,7 @@ def get_true_red_size(Xs:list, exprs:list, expr_true, ret_expr:bool = False) -> 
 # Regressor
 ########################################
 
-class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
+class SubstitutionRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
     '''
     Symbolic Regression based on Elimination Tests
 
@@ -547,7 +547,7 @@ class EliminationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMix
         self.positives = np.all(X > 0, axis = 0)
 
         if verbose > 0:
-            print('Recursively searching for Eliminations')
+            print('Recursively searching for Substitutions')
 
         exprs, Xs, ys = elimination_loop(X, y, only_input = self.only_input, score_fkt=self.score_fkt, verbose=verbose)
         # get translation dictionaries
