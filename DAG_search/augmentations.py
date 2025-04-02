@@ -10,9 +10,9 @@ import sympy
 from scipy import stats
 import warnings
 
-import utils
-import dag_search
-import comp_graph
+from DAG_search import utils
+from DAG_search import dag_search
+from DAG_search import comp_graph
 
 class Feature_loss_fkt(dag_search.DAG_Loss_fkt):
     def __init__(self, regr, y):
