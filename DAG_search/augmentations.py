@@ -198,10 +198,10 @@ class AugmentationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMi
     Augmentation Regressor for symbolic regression.
     '''
 
-    def __init__(self, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_time_aug:float = 900, max_samples:int = None, processes:int = 1, regr_search = None, fit_thresh:float = 1-(1e-8), **kwargs):
+    def __init__(self, symb_regr:sklearn.base.RegressorMixin, random_state:int = None, simpl_nodes:int = 2, topk:int = 1, max_orders:int = int(1e5), max_degree:int = 5, max_tree_size:int = 30, max_time_aug:float = 900, max_samples:int = None, processes:int = 1, fit_thresh:float = 1-(1e-8), **kwargs):
         self.random_state = random_state
         self.processes = processes
-        self.regr_search = regr_search
+        self.regr_search = symb_regr
         self.regr_poly = None
         self.simpl_nodes = simpl_nodes
         self.max_orders = max_orders
