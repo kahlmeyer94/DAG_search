@@ -251,10 +251,11 @@ class AugmentationRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMi
         else:
             # Search for substitutions that simplify the problem
             polydegrees = np.arange(1, self.max_degree + 1, 1)
-
-            for degree, score in zip(polydegrees, test_scores[:len(polydegrees)]):
-                if score > 0.999:
-                    break
+            #for degree, score in zip(polydegrees, test_scores[:len(polydegrees)]):
+            #    if score > 0.999:
+            #        break
+            degree = polydegrees[np.argmax(test_scores[:len(polydegrees)])]
+            
             if verbose > 0:
                 print(f'Selected degree {degree}')
             
