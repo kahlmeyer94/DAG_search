@@ -114,7 +114,7 @@ For advanced usage see the Tutorial-Notebook `tutorial.ipynb`.
 - `regr_search`... symbolic regressor used to search for solutions to augmented problems. Set to None to use default UDFS (Default = None).
 - `fit_thresh`... We consider models with an R2 Score greater than this as recovered. Set to > 1.0 to ignore (Default = 1-(1e-8)).
 
-#### Elimination Regressor
+#### Substitution Regressor
 - `symb_regr`... symbolic regressor that is used to tackle the reduced problems
 
 
