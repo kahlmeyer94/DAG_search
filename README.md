@@ -42,29 +42,28 @@ This is the base UDFS regressor.
 
 ```
 from DAG_search import dag_search
-udfs = dag_search.DAGRegressor()
-udfs.fit(X, y)
+est = dag_search.DAGRegressor()
+est.fit(X, y)
 ```
 
 #### UDFS + Aug
 This is UDFS with Augmentations as described in our paper.
 Here we wrap any symbolic regressor into an outer loop that detects variable augmentations.
 ```
-from DAG_search import dag_search
-udfs = dag_search.DAGRegressor() # UDFS
-udfs_aug = dag_search.AugRegressorPoly(regr_search = udfs) # UDFS + Aug
-udfs_aug.fit(X, y, verbose = 0)
+from DAG_search import dag_search, augmentations
+est = dag_search.DAGRegressor() # UDFS
+est_aug = augmentations.AugmentationRegressor(est) # UDFS + Aug
+est_aug.fit(X, y)
 ```
 
 #### UDFS + Aug + Eliminations
 Here we wrap any symbolic regressor into an outer loop that detects variable eliminations.
 This is especially useful if we have regression problems with a lot of inputs.
 ```
-from DAG_search import dag_search, eliminations
-udfs = dag_search.DAGRegressor()
-udfs_aug = dag_search.AugRegressorPoly(regr_search = udfs)
-udfs_aug_elim = eliminations.EliminationRegressor(udfs_aug)
-udfs_aug_elim.fit(X, y)
+from DAG_search import dag_search, substitutions
+est = dag_search.DAGRegressor() # UDFS
+est_sub = substitutions.SubstitutionRegressor(est) # UDFS + Substitutions
+est_sub.fit(X, y)
 ```
 
 #### Inference of the models
