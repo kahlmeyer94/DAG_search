@@ -13,7 +13,7 @@ Numeric Operations
 NODE_OPS = {
     '+' : lambda x, y: x + y,
     '*' : lambda x, y: x * y,
-    'sub' : lambda x, y: x - y,
+    #'sub' : lambda x, y: x - y,
     'div' : lambda x, y: x/y,
     '=' : lambda x: x,
     'inv' : lambda x : 1/x,
@@ -35,7 +35,7 @@ NODE_OPS = {
 NODE_OPS_PYTORCH = {
     '+' : lambda x, y: x + y,
     '*' : lambda x, y: x * y,
-    'sub' : lambda x, y: x - y,
+    #'sub' : lambda x, y: x - y,
     'div' : lambda x, y: x/y,
     '=' : lambda x: x,
     'inv' : lambda x : 1/x,
@@ -57,7 +57,7 @@ NODE_OPS_PYTORCH = {
 NODE_ARITY = {
     '+' : 2,
     '*' : 2,
-    'sub' : 2,
+    #'sub' : 2,
     'div' : 2,
     '=' : 1,
     'inv' : 1,
@@ -79,7 +79,7 @@ NODE_ARITY = {
 NODE_STR = {
     '+' : '(a)+(b)',
     '*' : '(a)*(b)',
-    'sub' : '(a)-(b)',
+    #'sub' : '(a)-(b)',
     'div' : '(a)/(b)',
     '=' : '(a)',
     'inv' : '1/(a)',
@@ -105,7 +105,7 @@ Symbolic Operations
 NODE_OPS_SYMB = {
     '+' : lambda x, y: x + y,
     '*' : lambda x, y: x * y,
-    'sub' : lambda x, y: x - y,
+    #'sub' : lambda x, y: x - y,
     'div' : lambda x, y: x/y,
     '=' : lambda x: x,
     'inv' : lambda x : 1/x,
@@ -127,7 +127,7 @@ NODE_OPS_SYMB = {
 NODE_ID = {
     '+' : 1,
     '*' : 2,
-    'sub' : 3,
+    #'sub' : 3,
     'div' : 4,
     '=' : 5,
     'inv' : 6,
