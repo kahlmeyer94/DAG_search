@@ -1525,6 +1525,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             graphs -> list of computational DAGs
             consts -> list of constants
             losses -> list of losses
+            total_evals -> number of evaluated graphs
 
     '''
     ret = {
@@ -1553,7 +1554,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         print(f'Total orders: {len(orders)}')
         print('Evaluating orders')
 
-
+    total_evals = 0 # number of evaluated graphs
     top_losses = []
     top_consts = []
     top_ops = []
@@ -1570,7 +1571,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
             pbar = orders
         for order in pbar:
             consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time, pareto=pareto, expect_evals=expect_evals)
-            
+            total_evals += len(losses)
             if pareto:
                 top_losses += losses
                 top_consts += consts
@@ -1646,6 +1647,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
         if verbose > 0:
             print('Collecting results')
         for i, (consts, losses, ops) in enumerate(pool_results):
+            total_evals += len(losses)
             if early_stop:
                 break
             if pareto:
@@ -1718,6 +1720,7 @@ def exhaustive_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_
     ret['graphs'] = top_graphs
     ret['consts'] = top_consts
     ret['losses'] = top_losses
+    ret['total_evals'] = total_evals
 
     return ret
 
@@ -1744,6 +1747,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
             graphs -> list of computational DAGs
             consts -> list of constants
             losses -> list of losses
+            total_evals -> number of evaluated graphs
     '''
     n_processes = max(min(n_processes, multiprocessing.cpu_count()), 1)
     ctx = multiprocessing.get_context('spawn')
@@ -1772,6 +1776,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
     if verbose > 0:
         print('Evaluating graphs')
 
+    total_evals = 0 # number of evaluated graphs
     top_losses = []
     top_consts = []
     top_graphs = []
@@ -1785,7 +1790,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
             pbar = cgraphs
         for cgraph in pbar:
             c, loss = evaluate_cgraph(cgraph, X, loss_fkt, opt_mode)
-
+            total_evals += 1
             if pareto:
                 # does this loss + graph dominate anyone completely?
                 # check which entries it dominates
@@ -1840,7 +1845,7 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
 
 
         for i, (c, loss) in enumerate(pool_results):
-
+            total_evals += 1
             if pareto:
                 # does this loss + graph dominate anyone completely?
                 # check which entries it dominates
@@ -1888,7 +1893,8 @@ def sample_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, n_calc
     ret = {
         'graphs' : top_graphs,
         'consts' : top_consts,
-        'losses' : top_losses}
+        'losses' : top_losses,
+        'total_evals' : total_evals}
 
     return ret
 
@@ -1918,6 +1924,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
             graphs -> list of computational DAGs
             consts -> list of constants
             losses -> list of losses
+            total_evals -> number of evaluated graphs
 
     '''
     ret = {
@@ -1939,6 +1946,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
     m = X.shape[1]
     n = n_outps
 
+    total_evals = 0 # number of evaluated graphs
     top_losses = []
     top_consts = []
     top_ops = []
@@ -1975,7 +1983,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
                     break
 
                 consts, losses, ops = evaluate_build_order(order, m, n, k, X, loss_fkt, topk, opt_mode = opt_mode, start_time=process_start_time, max_time=max_time, pareto=pareto)
-                
+                total_evals += len(losses)
                 if pareto:
                     top_losses += losses
                     top_consts += consts
@@ -2046,6 +2054,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
 
 
             for i, (consts, losses, ops) in enumerate(pool_results):
+                total_evals += len(losses)
                 if early_stop:
                     break
 
@@ -2121,6 +2130,7 @@ def hierarchical_search(X:np.ndarray, n_outps: int, loss_fkt: callable, k: int, 
     ret['graphs'] = top_graphs
     ret['consts'] = top_consts
     ret['losses'] = top_losses
+    ret['total_evals'] = total_evals
 
     return ret
 
@@ -2153,6 +2163,7 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
             pareto... flag for exhaustive search
             use_tan... if True, we will use a tangens transform on the constants
         '''
+        self.total_evals = 0
         self.k = k
         self.n_calc_nodes = n_calc_nodes
         self.max_orders = max_orders
@@ -2222,6 +2233,9 @@ class DAGRegressor(sklearn.base.BaseEstimator, sklearn.base.RegressorMixin):
         else:
             res = exhaustive_search(**params)
         self.results = res
+        self.total_evals = res['total_evals']
+        if verbose > 0:
+            print(f'Total evaluated graphs: {self.total_evals}')
 
         if len(res['graphs']) > 0:
             # optimizing constants of top DAGs
